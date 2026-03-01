@@ -8,6 +8,8 @@ struct MainView: View {
     
     @State private var showingCreateFolderAlert = false
     @State private var newFolderName = ""
+    @State private var showClearAllConfirm = false
+
 
     @AppStorage("hkPinKey") private var hkPinKey: String = "p"
     @AppStorage("hkPinModifiers") private var hkPinModifiers: Int = Int(NSEvent.ModifierFlags.command.rawValue)
@@ -71,31 +73,30 @@ struct MainView: View {
                     
                     Spacer()
                     
-                    Button(action: {
-                        storage.clearFolder(id: activeFolder.id)
-                    }) {
-                        Image(systemName: "trash.circle")
-                            .foregroundColor(.orange)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Clear All Items in Folder")
-                    
-                    Button(action: {
-                        storage.deleteFolder(id: activeFolder.id)
-                        storage.selectedFolderID = nil
-                    }) {
-                        Image(systemName: "folder.badge.minus")
-                            .foregroundColor(.red)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Delete Folder")
-                    
-                    Button(action: { storage.selectedFolderID = nil }) {
-                        Image(systemName: "xmark.circle.fill")
+                    // Folder actions — one button, clear labels
+                    Menu {
+                        Button("Clear all items in this folder", role: .destructive) {
+                            storage.clearFolder(id: activeFolder.id)
+                        }
+                        Divider()
+                        Button("Delete folder (keep items)", role: .destructive) {
+                            storage.deleteFolder(id: activeFolder.id)
+                            storage.selectedFolderID = nil
+                        }
+                        Button("Delete folder and all its items", role: .destructive) {
+                            storage.clearFolder(id: activeFolder.id)
+                            storage.deleteFolder(id: activeFolder.id)
+                            storage.selectedFolderID = nil
+                        }
+                        Divider()
+                        Button("Close") { storage.selectedFolderID = nil }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
                             .foregroundColor(.secondary)
+                            .font(.system(size: 15))
                     }
-                    .buttonStyle(.plain)
-                    .help("Close Folder")
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -140,14 +141,20 @@ struct MainView: View {
                 .menuStyle(.borderlessButton)
                 .fixedSize()
                 
-                Button(action: {
-                    storage.clearUnpinned()
-                }) {
+                Menu {
+                    Button("Clear all unpinned items", role: .destructive) {
+                        storage.clearUnpinned()
+                    }
+                    Button("Clear all text history", role: .destructive) {
+                        storage.clearUnpinnedText()
+                    }
+                } label: {
                     Image(systemName: "trash")
                         .foregroundColor(.red)
                 }
-                .buttonStyle(.plain)
-                .help("Clear All Unpinned Items")
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("Clear History")
                 .padding(.horizontal, 4)
                 
                 Button(action: {
@@ -254,6 +261,7 @@ struct MainView: View {
                             item: item,
                             folders: storage.folders,
                             hoveredItemID: hoveredItemID,
+                            selectedFolderID: storage.selectedFolderID,
                             onPin: { storage.togglePin(for: item.id) },
                             onDelete: { storage.deleteItem(with: item.id) },
                             onAssignToFolder: { fid in storage.assign(item: item.id, to: fid) }

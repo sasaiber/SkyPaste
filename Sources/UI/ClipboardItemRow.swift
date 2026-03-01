@@ -4,6 +4,7 @@ struct ClipboardItemRow: View {
     let item: ClipboardItem
     let folders: [AppFolder]
     let hoveredItemID: UUID?
+    var selectedFolderID: UUID? = nil   // current view context
     var isHovered: Bool { hoveredItemID == item.id }
     
     var onPin: (() -> Void)? = nil
@@ -124,12 +125,15 @@ struct ClipboardItemRow: View {
                     .fixedSize()
                     .foregroundColor(.secondary)
                     
-                    Button(action: { onDelete?() }) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 14))
+                    // Only show delete if item isn't in a folder, or we're inside that folder
+                    if item.folderID == nil || selectedFolderID == item.folderID {
+                        Button(action: { onDelete?() }) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 14))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(.secondary)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundColor(.secondary)
                 } else {
                     Text(timeAgoDisplay(date: item.timestamp))
                         .font(.caption2)

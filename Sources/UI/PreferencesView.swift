@@ -45,6 +45,7 @@ struct PreferencesView: View {
                 Text("Shortcuts").tag(1)
                 Text("Storage").tag(2)
                 Text("Folders").tag(3)
+                Text("About").tag(4)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, 16)
@@ -177,6 +178,8 @@ struct PreferencesView: View {
                             onSaveShortcuts: saveFolderShortcuts
                         )
                         
+                    case 4:
+                        AboutTabView()
                     default:
                         EmptyView()
                     }
