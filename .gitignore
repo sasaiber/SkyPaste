@@ -1,0 +1,10 @@
+.DS_Store
+build/
+*.app
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+DerivedData/
+.build/
+.swiftpm/
+Maccy-2.6.1/

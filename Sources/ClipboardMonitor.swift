@@ -1,0 +1,202 @@
+import Foundation
+import AppKit
+import UniformTypeIdentifiers
+
+class ClipboardMonitor: ObservableObject {
+    private let pasteboard = NSPasteboard.general
+    private var lastChangeCount: Int
+    private var timer: Timer?
+
+    let storage: Storage
+
+    init(storage: Storage) {
+        self.storage = storage
+        self.lastChangeCount = pasteboard.changeCount
+    }
+
+    func start() {
+        timer = Timer.scheduledTimer(
+            withTimeInterval: 0.75,
+            repeats: true
+        ) { [weak self] _ in
+            self?.checkForChanges()
+        }
+    }
+
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+    }
+
+    private func checkForChanges() {
+        let current = pasteboard.changeCount
+        guard current != lastChangeCount else { return }
+        lastChangeCount = current
+        processNewItem()
+    }
+
+    private func processNewItem() {
+        let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown"
+        let sourceBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+
+        let allItems = pasteboard.pasteboardItems ?? []
+        let types = Set(pasteboard.types ?? [])
+
+        // 1. Multi-file / single-file: collect ALL file URLs from every pasteboard item
+        let fileURLs: [URL] = allItems.compactMap { pbItem in
+            guard let data = pbItem.data(forType: .fileURL),
+                  let str = String(data: data, encoding: .utf8),
+                  let url = URL(string: str) else { return nil }
+            return url
+        }
+
+        if !fileURLs.isEmpty {
+            if fileURLs.count == 1 {
+                let item = ClipboardItem(
+                    timestamp: Date(), firstCopiedAt: Date(), type: .file,
+                    fileURL: fileURLs[0], appSource: sourceApp, appBundleID: sourceBundleID
+                )
+                Task { @MainActor in storage.addItem(item) }
+            } else {
+                // Multiple files: store them as a multi-file record using a temp directory
+                let joined = fileURLs.map { $0.absoluteString }.joined(separator: "\n")
+                let item = ClipboardItem(
+                    timestamp: Date(), firstCopiedAt: Date(), type: .file,
+                    textContent: joined,
+                    title: "\(fileURLs.count) files",
+                    fileURL: fileURLs.first,
+                    appSource: sourceApp, appBundleID: sourceBundleID
+                )
+                Task { @MainActor in storage.addItem(item) }
+            }
+            return
+        }
+
+        // 2. Images — read raw PNG/TIFF bytes, write to disk immediately; never hold in RAM
+        if let pngData = pasteboard.data(forType: .png) ?? extractPNGFromTIFF(pasteboard.data(forType: .tiff)) {
+            savePNGToDisk(data: pngData, source: sourceApp, bundleID: sourceBundleID)
+            return
+        }
+
+        // Fallback: try NSImage (e.g. screenshots copied from Preview)
+        if types.contains(.tiff) || types.contains(.png),
+           NSImage.canInit(with: pasteboard),
+           let image = NSImage(pasteboard: pasteboard),
+           let data = renderImageToPNG(image) {
+            savePNGToDisk(data: data, source: sourceApp, bundleID: sourceBundleID)
+            return
+        }
+
+        // 3. URLs / Links
+        if types.contains(.URL),
+           let urlStr = pasteboard.string(forType: .URL),
+           !urlStr.isEmpty {
+            let item = ClipboardItem(
+                timestamp: Date(), firstCopiedAt: Date(), type: .link,
+                textContent: urlStr, appSource: sourceApp, appBundleID: sourceBundleID
+            )
+            Task { @MainActor in storage.addItem(item) }
+            return
+        }
+
+        // 4. Plain text (last)
+        if let text = pasteboard.string(forType: .string), !text.isEmpty {
+            let item = ClipboardItem(
+                timestamp: Date(), firstCopiedAt: Date(), type: .text,
+                textContent: text, appSource: sourceApp, appBundleID: sourceBundleID
+            )
+            Task { @MainActor in storage.addItem(item) }
+        }
+    }
+
+    // MARK: - Image helpers (no RAM retention)
+
+    private func extractPNGFromTIFF(_ tiffData: Data?) -> Data? {
+        guard let data = tiffData,
+              let rep = NSBitmapImageRep(data: data) else { return nil }
+        return rep.representation(using: .png, properties: [:])
+    }
+
+    private func renderImageToPNG(_ image: NSImage) -> Data? {
+        let rect = NSRect(origin: .zero, size: image.size)
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: Int(rect.width), pixelsHigh: Int(rect.height),
+            bitsPerSample: 8, samplesPerPixel: 4,
+            hasAlpha: true, isPlanar: false,
+            colorSpaceName: .calibratedRGB,
+            bytesPerRow: 0, bitsPerPixel: 0
+        ), let ctx = NSGraphicsContext(bitmapImageRep: rep) else { return nil }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = ctx
+        image.draw(in: rect)
+        NSGraphicsContext.restoreGraphicsState()
+        return rep.representation(using: .png, properties: [:])
+    }
+
+    private func savePNGToDisk(data: Data, source: String, bundleID: String?) {
+        let base = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("SkyPaste/Images", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+            let fileName = UUID().uuidString + ".png"
+            let url = base.appendingPathComponent(fileName)
+            try data.write(to: url, options: .atomic)
+            let item = ClipboardItem(
+                timestamp: Date(), firstCopiedAt: Date(), type: .image,
+                fileURL: url, sizeLabel: "\(data.count / 1024) KB",
+                appSource: source, appBundleID: bundleID
+            )
+            Task { @MainActor in storage.addItem(item) }
+        } catch { /* silently ignore write errors */ }
+    }
+
+    // MARK: - Pasteboard write-back
+
+    func copyToPasteboard(item: ClipboardItem, plainTextOnly: Bool) {
+        stop()
+        pasteboard.clearContents()
+
+        switch item.type {
+        case .text, .link:
+            if let txt = item.textContent {
+                pasteboard.setString(txt, forType: .string)
+            }
+        case .image:
+            if let url = item.fileURL, let img = NSImage(contentsOf: url) {
+                pasteboard.writeObjects([img])
+            }
+        case .file:
+            // Support multi-file record (URLs stored newline-separated in textContent)
+            if let joined = item.textContent, item.title?.hasSuffix("files") == true {
+                let urls: [NSURL] = joined
+                    .components(separatedBy: "\n")
+                    .compactMap { URL(string: $0) as NSURL? }
+                pasteboard.writeObjects(urls)
+            } else if let url = item.fileURL {
+                pasteboard.writeObjects([url as NSURL])
+            }
+        default:
+            break
+        }
+
+        lastChangeCount = pasteboard.changeCount
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.start()
+        }
+    }
+
+    func triggerCmdV() {
+        let vKeyCode: CGKeyCode = 0x09
+        guard let source = CGEventSource(stateID: .hidSystemState) else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            let keyDown = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: true)
+            keyDown?.flags = .maskCommand
+            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: false)
+            keyUp?.flags = .maskCommand
+            keyDown?.post(tap: .cghidEventTap)
+            keyUp?.post(tap: .cghidEventTap)
+        }
+    }
+}
