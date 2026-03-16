@@ -27,8 +27,12 @@ class WindowManager {
             popover.show(relativeTo: view.bounds, of: view, preferredEdge: .maxY)
         }
         
-        NotificationCenter.default.addObserver(forName: NSPopover.didCloseNotification, object: popover, queue: .main) { _ in
-            dummyWindow.close()
+        // Use DispatchQueue to close window after popover closes
+        // This avoids NotificationCenter observer leaks
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak popover] in
+            if let popover = popover, !popover.isShown {
+                dummyWindow.close()
+            }
         }
         
         NSApp.activate(ignoringOtherApps: true)
@@ -64,8 +68,12 @@ class WindowManager {
             popover.show(relativeTo: view.bounds, of: view, preferredEdge: .maxY)
         }
         
-        NotificationCenter.default.addObserver(forName: NSPopover.didCloseNotification, object: popover, queue: .main) { _ in
-            dummyWindow.close()
+        // Use DispatchQueue to close window after popover closes
+        // This avoids NotificationCenter observer leaks
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak popover] in
+            if let popover = popover, !popover.isShown {
+                dummyWindow.close()
+            }
         }
         
         NSApp.activate(ignoringOtherApps: true)

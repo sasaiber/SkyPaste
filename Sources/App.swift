@@ -62,16 +62,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         
         self.globalStore = Storage()
-        let mainView = MainView(storage: self.globalStore)
         
-        // Create popover
+        // Create popover FIRST and set delegate
         let popover = NSPopover()
         popover.contentSize = NSSize(width: 400, height: 600)
         popover.behavior = .transient
-        // UI will be injected here
-        popover.contentViewController = NSHostingController(rootView: mainView)
         popover.delegate = self
         self.popover = popover
+        
+        // THEN create the view controller after delegate is set
+        let mainView = MainView(storage: self.globalStore)
+        popover.contentViewController = NSHostingController(rootView: mainView)
         
         // Create Status Bar Item
         self.statusBarItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -130,6 +131,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if self.popover.isShown {
             self.popover.performClose(sender)
         } else {
+            // Recreate the content view controller if it was cleared
+            if self.popover.contentViewController == nil {
+                let mainView = MainView(storage: self.globalStore)
+                self.popover.contentViewController = NSHostingController(rootView: mainView)
+            }
+            
             let position = UserDefaults.standard.string(forKey: "popupPosition") ?? "cursor"
             switch position {
             case "statusItem":
