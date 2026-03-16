@@ -25,6 +25,14 @@ SkyPaste is a lightweight, efficient clipboard manager for macOS, designed with 
 
 ![Settings](screen/settings.png)
 
+## Privacy
+
+Your privacy is paramount. Read our [Privacy Policy](PRIVACY_POLICY.md) to learn how SkyPaste operates:
+- ✅ All data stays on your machine
+- ✅ Nothing is sent to external servers
+- ✅ No tracking, no analytics, no cloud
+- ✅ Complete local control
+
 ## Support & Feedback
 
 If you enjoy using SkyPaste, please consider:
