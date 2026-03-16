@@ -66,18 +66,40 @@ class ClipboardMonitor: ObservableObject {
             return
         }
 
-        // 2. Images — read raw PNG/TIFF bytes, write to disk immediately; never hold in RAM
+        // 2. Images — read raw PNG/TIFF bytes, write to disk immediately
+        // Handle multiple images at once
+        var imageURLs: [URL] = []
+        
         if let pngData = pasteboard.data(forType: .png) ?? extractPNGFromTIFF(pasteboard.data(forType: .tiff)) {
-            savePNGToDisk(data: pngData, source: sourceApp, bundleID: sourceBundleID)
-            return
+            if let url = savePNGToDiskAndReturnURL(data: pngData, source: sourceApp, bundleID: sourceBundleID) {
+                imageURLs.append(url)
+            }
         }
-
+        
         // Fallback: try NSImage (e.g. screenshots copied from Preview)
-        if types.contains(.tiff) || types.contains(.png),
+        if imageURLs.isEmpty && (types.contains(.tiff) || types.contains(.png)),
            NSImage.canInit(with: pasteboard),
            let image = NSImage(pasteboard: pasteboard),
            let data = renderImageToPNG(image) {
-            savePNGToDisk(data: data, source: sourceApp, bundleID: sourceBundleID)
+            if let url = savePNGToDiskAndReturnURL(data: data, source: sourceApp, bundleID: sourceBundleID) {
+                imageURLs.append(url)
+            }
+        }
+        
+        if !imageURLs.isEmpty {
+            // Create item(s) for images
+            let item = ClipboardItem(
+                timestamp: Date(),
+                firstCopiedAt: Date(),
+                type: .image,
+                textContent: imageURLs.map { $0.absoluteString }.joined(separator: "\n"),
+                title: imageURLs.count > 1 ? "\(imageURLs.count) images" : nil,
+                fileURL: imageURLs.first,
+                sizeLabel: "\(imageURLs.count) image\(imageURLs.count > 1 ? "s" : "")",
+                appSource: sourceApp,
+                appBundleID: sourceBundleID
+            )
+            Task { @MainActor in storage.addItem(item) }
             return
         }
 
@@ -194,6 +216,21 @@ class ClipboardMonitor: ObservableObject {
             Task { @MainActor in storage.addItem(item) }
         } catch { /* silently ignore write errors */ }
     }
+    
+    private func savePNGToDiskAndReturnURL(data: Data, source: String, bundleID: String?) -> URL? {
+        let base = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("SkyPaste/Images", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+            let fileName = UUID().uuidString + ".png"
+            let url = base.appendingPathComponent(fileName)
+            try data.write(to: url, options: .atomic)
+            return url
+        } catch { 
+            return nil
+        }
+    }
 
     // MARK: - Pasteboard write-back
 
@@ -207,7 +244,14 @@ class ClipboardMonitor: ObservableObject {
                 pasteboard.setString(txt, forType: .string)
             }
         case .image:
-            if let url = item.fileURL, let img = NSImage(contentsOf: url) {
+            // Support multi-image record (URLs stored newline-separated in textContent)
+            if let joined = item.textContent, item.title?.hasSuffix("images") == true {
+                let imageURLs: [NSURL] = joined
+                    .components(separatedBy: "\n")
+                    .compactMap { URL(string: $0) as NSURL? }
+                let images = imageURLs.compactMap { NSImage(contentsOf: $0 as URL) }
+                pasteboard.writeObjects(images)
+            } else if let url = item.fileURL, let img = NSImage(contentsOf: url) {
                 pasteboard.writeObjects([img])
             }
         case .file:

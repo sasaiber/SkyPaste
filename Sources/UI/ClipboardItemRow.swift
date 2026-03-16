@@ -51,7 +51,37 @@ struct ClipboardItemRow: View {
             
             // 2. Main Content
             VStack(alignment: .leading, spacing: 2) {
-                if item.type == .image || (item.type == .file && isImageURL(item.fileURL)), 
+                // Handle multiple images
+                if item.type == .image, let title = item.title, title.hasSuffix("images"), let content = item.textContent {
+                    Text(title)
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .lineLimit(1)
+                        .foregroundColor(.accentColor)
+                    
+                    // Show thumbnails grid
+                    let imageURLs = content.components(separatedBy: "\n")
+                        .compactMap { URL(string: $0) }
+                    
+                    HStack(spacing: 6) {
+                        ForEach(Array(imageURLs.prefix(3).enumerated()), id: \.offset) { _, url in
+                            if let thumbnail = NSImage(contentsOf: url) {
+                                Image(nsImage: thumbnail)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 28, height: 28)
+                                    .cornerRadius(4)
+                                    .clipped()
+                            }
+                        }
+                        if imageURLs.count > 3 {
+                            Text("+\(imageURLs.count - 3)")
+                                .font(.system(size: 10, weight: .semibold))
+                                .frame(width: 28, height: 28)
+                                .background(Color.accentColor.opacity(0.2))
+                                .cornerRadius(4)
+                        }
+                    }
+                } else if item.type == .image || (item.type == .file && isImageURL(item.fileURL)), 
                    let url = item.fileURL {
                     
                     let thumbnail = getThumbnail(url: url)
@@ -266,7 +296,25 @@ struct ClipboardItemRow: View {
             Divider()
             
             // Content
-            if item.type == .image || (item.type == .file && isImageURL(item.fileURL)), 
+            if item.type == .image, let title = item.title, title.hasSuffix("images"), let content = item.textContent {
+                // Multiple images
+                let imageURLs = content.components(separatedBy: "\n")
+                    .compactMap { URL(string: $0) }
+                
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(Array(imageURLs.enumerated()), id: \.offset) { index, url in
+                            if let nsImage = NSImage(contentsOf: url) {
+                                Image(nsImage: nsImage)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(maxWidth: 350, maxHeight: 300)
+                            }
+                        }
+                    }
+                    .padding()
+                }
+            } else if item.type == .image || (item.type == .file && isImageURL(item.fileURL)), 
                let url = item.fileURL, let nsImage = NSImage(contentsOf: url) {
                 Image(nsImage: nsImage)
                     .resizable()
