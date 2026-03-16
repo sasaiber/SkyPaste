@@ -72,15 +72,37 @@ struct ClipboardItemRow: View {
                     }
                     
                 } else if item.type == .file {
-                    Text(item.fileURL?.lastPathComponent ?? "Unknown File")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .lineLimit(1)
-                    if let fileURL = item.fileURL {
-                        Text(fileURL.path)
-                            .font(.system(size: 9, design: .monospaced))
+                    // Show "N files" title if multiple files
+                    if let title = item.title, title.hasSuffix("files") {
+                        Text(title)
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
                             .lineLimit(1)
-                            .foregroundColor(.secondary)
-                            .truncationMode(.middle)
+                            .foregroundColor(.accentColor)
+                        
+                        // Show first few file names
+                        if let content = item.textContent {
+                            let files = content.components(separatedBy: "\n")
+                                .compactMap { URL(string: $0)?.lastPathComponent }
+                                .prefix(3)
+                            
+                            Text(files.joined(separator: ", ") + (files.count < content.components(separatedBy: "\n").count ? ", ..." : ""))
+                                .font(.system(size: 9, design: .monospaced))
+                                .lineLimit(1)
+                                .foregroundColor(.secondary)
+                                .truncationMode(.tail)
+                        }
+                    } else {
+                        // Single file
+                        Text(item.fileURL?.lastPathComponent ?? "Unknown File")
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .lineLimit(1)
+                        if let fileURL = item.fileURL {
+                            Text(fileURL.path)
+                                .font(.system(size: 9, design: .monospaced))
+                                .lineLimit(1)
+                                .foregroundColor(.secondary)
+                                .truncationMode(.middle)
+                        }
                     }
                 } else {
                     let text = item.textContent ?? "Empty"
@@ -252,13 +274,51 @@ struct ClipboardItemRow: View {
                     .frame(maxWidth: 400, maxHeight: 400)
                     .padding()
             } else if item.type == .file {
-                VStack(alignment: .leading) {
-                    Text(item.fileURL?.lastPathComponent ?? "File")
-                        .font(.headline)
-                    Text(item.fileURL?.path ?? "")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .textSelection(.enabled)
+                VStack(alignment: .leading, spacing: 8) {
+                    // Check if multiple files
+                    if let title = item.title, title.hasSuffix("files"), let content = item.textContent {
+                        Text(title)
+                            .font(.headline)
+                            .foregroundColor(.accentColor)
+                        
+                        Divider()
+                        
+                        // List all files
+                        let filePaths = content.components(separatedBy: "\n")
+                            .compactMap { URL(string: $0) }
+                        
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(Array(filePaths.enumerated()), id: \.offset) { index, url in
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(url.lastPathComponent)
+                                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                            .lineLimit(1)
+                                        Text(url.path)
+                                            .font(.system(size: 9, design: .monospaced))
+                                            .lineLimit(2)
+                                            .foregroundColor(.secondary)
+                                            .truncationMode(.middle)
+                                    }
+                                    if index < filePaths.count - 1 {
+                                        Divider()
+                                    }
+                                }
+                            }
+                            .padding(6)
+                        }
+                        .frame(maxHeight: 200)
+                        .background(Color.secondary.opacity(0.05))
+                        .cornerRadius(6)
+                    } else {
+                        // Single file
+                        Text(item.fileURL?.lastPathComponent ?? "File")
+                            .font(.headline)
+                        Text(item.fileURL?.path ?? "")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .textSelection(.enabled)
+                    }
                 }
                 .padding()
             } else {
