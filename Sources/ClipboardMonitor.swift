@@ -51,18 +51,18 @@ class ClipboardMonitor: ObservableObject {
         }
 
         if !fileURLs.isEmpty {
-            // Create separate items for each file
-            for fileURL in fileURLs {
-                let item = ClipboardItem(
-                    timestamp: Date(), 
-                    firstCopiedAt: Date(), 
-                    type: .file,
-                    fileURL: fileURL, 
-                    appSource: sourceApp, 
-                    appBundleID: sourceBundleID
-                )
-                Task { @MainActor in storage.addItem(item) }
-            }
+            // Store all files as a single clipboard item
+            let item = ClipboardItem(
+                timestamp: Date(), 
+                firstCopiedAt: Date(), 
+                type: .file,
+                textContent: fileURLs.map { $0.absoluteString }.joined(separator: "\n"),
+                title: fileURLs.count > 1 ? "\(fileURLs.count) files" : fileURLs.first?.lastPathComponent,
+                fileURL: fileURLs.first,
+                appSource: sourceApp, 
+                appBundleID: sourceBundleID
+            )
+            Task { @MainActor in storage.addItem(item) }
             return
         }
 
