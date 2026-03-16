@@ -132,9 +132,11 @@ class ClipboardMonitor: ObservableObject {
         ), let ctx = NSGraphicsContext(bitmapImageRep: rep) else { return nil }
         
         NSGraphicsContext.saveGraphicsState()
+        defer {
+            NSGraphicsContext.restoreGraphicsState()
+        }
         NSGraphicsContext.current = ctx
         image.draw(in: rect)
-        NSGraphicsContext.restoreGraphicsState()
         
         // Optimize and compress
         let optimized = optimizeImage(rep)

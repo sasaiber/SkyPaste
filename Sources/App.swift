@@ -27,7 +27,8 @@ extension AppDelegate: NSPopoverDelegate {
     func popoverWillShow(_ notification: Notification) {
         if outsideClickMonitor == nil {
             outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-                self?.popover.performClose(nil)
+                guard let self = self else { return }
+                self.popover.performClose(nil)
             }
         }
     }
@@ -36,6 +37,12 @@ extension AppDelegate: NSPopoverDelegate {
         if let monitor = outsideClickMonitor {
             NSEvent.removeMonitor(monitor)
             outsideClickMonitor = nil
+        }
+        
+        // Important: Clear the content view controller to break retain cycles
+        // when popover closes. This prevents memory leaks.
+        DispatchQueue.main.async { [weak self] in
+            self?.popover.contentViewController = nil
         }
     }
 }
@@ -202,6 +209,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         
         self.welcomeWindow = window
+    }
+    
+    // MARK: - Application Termination
+    
+    func applicationWillTerminate(_ notification: Notification) {
+        // Stop clipboard monitoring
+        monitorRef?.stop()
+        
+        // Stop hotkey manager
+        HotkeyManager.shared.stop()
+        
+        // Clear image cache
+        ImageCache.shared.clear()
+        
+        // Clean up windows
+        popover = nil
+        settingsWindow = nil
+        welcomeWindow = nil
+        
+        // Remove global monitor
+        if let monitor = outsideClickMonitor {
+            NSEvent.removeMonitor(monitor)
+            outsideClickMonitor = nil
+        }
+    }
+    
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        return false // macOS menu-bar app, don't terminate when window closes
     }
 }
 

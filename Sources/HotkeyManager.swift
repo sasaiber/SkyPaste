@@ -228,4 +228,8 @@ class HotkeyManager {
             handlerRef = nil
         }
     }
+    
+    func stop() {
+        unregisterAll()
+    }
 }
