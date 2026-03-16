@@ -237,8 +237,14 @@ class ClipboardMonitor: ObservableObject {
             let fileName = UUID().uuidString + ".png"
             let url = base.appendingPathComponent(fileName)
             try data.write(to: url, options: .atomic)
+            
+            // Verify file exists
+            let exists = FileManager.default.fileExists(atPath: url.path)
+            print("💾 Saved image (\(data.count) bytes) to: \(url.path) - Exists: \(exists)")
+            
             return url
         } catch { 
+            print("❌ Failed to save image: \(error)")
             return nil
         }
     }

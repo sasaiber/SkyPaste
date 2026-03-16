@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct ClipboardItemRow: View {
     let item: ClipboardItem
@@ -54,6 +55,7 @@ struct ClipboardItemRow: View {
                 // Handle images (single or multiple)
                 if item.type == .image, let content = item.textContent {
                     let imageURLs = content.components(separatedBy: "\n")
+                        .filter { !$0.isEmpty }
                         .compactMap { URL(string: $0) }
                     
                     if imageURLs.count > 0 {
@@ -75,6 +77,7 @@ struct ClipboardItemRow: View {
                                         .frame(width: 48, height: 48)
                                         .cornerRadius(6)
                                         .clipped()
+                                        .background(Color.gray.opacity(0.2))
                                         .overlay(
                                             Text("\(idx + 1)")
                                                 .font(.system(size: 10, weight: .bold))
@@ -484,17 +487,31 @@ struct ClipboardItemRow: View {
             return cached
         }
         
-        // Load and scale to thumbnail size (max 36x36)
-        guard let fullImage = NSImage(contentsOf: url) else {
+        // Try to load image - NSImage(contentsOf:) is the best way
+        var fullImage: NSImage?
+        if url.scheme == "file" {
+            // It's a file URL, load from path
+            fullImage = NSImage(contentsOf: url)
+        } else {
+            // Try direct URL
+            fullImage = NSImage(contentsOf: url)
+        }
+        
+        guard let image = fullImage else {
+            print("❌ Failed to load image from: \(url.path)")
             return NSImage(systemSymbolName: "photo.fill", accessibilityDescription: nil) ?? NSImage()
         }
         
-        let thumbSize = NSSize(width: 36, height: 36)
+        print("✅ Loaded image from: \(url.path)")
+        
+        let thumbSize = NSSize(width: 48, height: 48)
         let scaledImage = NSImage(size: thumbSize)
+        scaledImage.size = thumbSize
         
         scaledImage.lockFocus()
-        let rect = NSRect(origin: .zero, size: thumbSize)
-        fullImage.draw(in: rect, from: NSRect(origin: .zero, size: fullImage.size), operation: .copy, fraction: 1.0)
+        NSColor.white.setFill()
+        NSBezierPath(rect: NSRect(origin: .zero, size: thumbSize)).fill()
+        image.draw(in: NSRect(origin: .zero, size: thumbSize))
         scaledImage.unlockFocus()
         
         // Cache it
