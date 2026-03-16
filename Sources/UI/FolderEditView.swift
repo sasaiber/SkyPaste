@@ -39,11 +39,22 @@ struct FolderEditView: View {
                     TextField("", text: $editedEmoji)
                         .opacity(0.01)
                         .frame(width: 52, height: 52)
-                        .onChange(of: editedEmoji) { _, nv in
-                            let emojis = nv.unicodeScalars.filter { $0.properties.isEmoji && $0.value > 0x30 }
-                            if let last = emojis.last, let scalar = Unicode.Scalar(last.value) {
-                                editedEmoji = String(Character(scalar))
-                            } else if !nv.isEmpty {
+                        .onChange(of: editedEmoji) { _, newValue in
+                            // Extract only emoji characters (preserving emoji with modifiers)
+                            let emojiCharacters = newValue.filter { char in
+                                char.unicodeScalars.allSatisfy { $0.properties.isEmoji }
+                            }
+                            
+                            if !emojiCharacters.isEmpty {
+                                // Keep only the last emoji
+                                if let lastEmoji = emojiCharacters.last {
+                                    editedEmoji = String(lastEmoji)
+                                }
+                            } else if newValue.isEmpty {
+                                // Allow clearing the field
+                                editedEmoji = ""
+                            } else {
+                                // User entered non-emoji text, keep previous value
                                 editedEmoji = folder.emoji ?? "📁"
                             }
                         }
