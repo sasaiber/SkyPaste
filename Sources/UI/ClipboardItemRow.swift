@@ -51,32 +51,47 @@ struct ClipboardItemRow: View {
             
             // 2. Main Content
             VStack(alignment: .leading, spacing: 2) {
-                // Handle multiple images
-                if item.type == .image, let title = item.title, title.hasSuffix("images"), let content = item.textContent {
-                    Text(title)
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .lineLimit(1)
-                        .foregroundColor(.accentColor)
-                    
-                    // Show thumbnails in horizontal scroll
+                // Handle images (single or multiple)
+                if item.type == .image, let content = item.textContent {
                     let imageURLs = content.components(separatedBy: "\n")
                         .compactMap { URL(string: $0) }
                     
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(Array(imageURLs.enumerated()), id: \.offset) { _, url in
-                                if let nsImage = NSImage(contentsOf: url) {
-                                    Image(nsImage: nsImage)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 36, height: 36)
-                                        .cornerRadius(4)
-                                        .clipped()
+                    if imageURLs.count > 0 {
+                        if let title = item.title {
+                            Text(title)
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .lineLimit(1)
+                                .foregroundColor(.accentColor)
+                        }
+                        
+                        // Show ALL thumbnails in horizontal scroll (works for 1 or many)
+                        ScrollView(.horizontal, showsIndicators: true) {
+                            HStack(spacing: 6) {
+                                ForEach(Array(imageURLs.enumerated()), id: \.offset) { idx, url in
+                                    if let nsImage = NSImage(contentsOf: url) {
+                                        Image(nsImage: nsImage)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 48, height: 48)
+                                            .cornerRadius(6)
+                                            .clipped()
+                                            .overlay(
+                                                Text("\(idx + 1)")
+                                                    .font(.system(size: 10, weight: .bold))
+                                                    .foregroundColor(.white)
+                                                    .padding(4)
+                                                    .background(Color.black.opacity(0.6))
+                                                    .cornerRadius(3)
+                                                    .padding(4),
+                                                alignment: .topTrailing
+                                            )
+                                    }
                                 }
                             }
+                            .padding(.vertical, 4)
                         }
+                        .frame(height: 64)
                     }
-                    .frame(height: 36)
                 } else if item.type == .image || (item.type == .file && isImageURL(item.fileURL)), 
                    let url = item.fileURL {
                     
