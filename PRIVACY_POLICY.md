@@ -136,4 +136,4 @@ Since SkyPaste does not collect, transmit, or store personal data on remote serv
 
 **SkyPaste keeps your clipboard private. Everything stays on your machine. Nothing is sent to our servers. You have complete control over your data.**
 
-Enjoy using SkyPaste knowing that your clipboard history is yours and yours alone.
+Enjoy using SkyPaste knowing that your clipboard history is yours and yours alone!
