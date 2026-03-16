@@ -70,34 +70,47 @@ class ClipboardMonitor: ObservableObject {
         // Handle multiple images at once - check ALL pasteboard items
         var imageURLs: [URL] = []
         
-        for pbItem in allItems {
+        print("📋 Processing pasteboard - total items: \(allItems.count)")
+        
+        for (idx, pbItem) in allItems.enumerated() {
+            print("  Item \(idx): checking for image types...")
             // Try PNG first
             if let pngData = pbItem.data(forType: .png) {
+                print("    ✅ Found PNG data (\(pngData.count) bytes)")
                 if let url = savePNGToDiskAndReturnURL(data: pngData, source: sourceApp, bundleID: sourceBundleID) {
                     imageURLs.append(url)
                 }
             }
             // Try TIFF
             else if let tiffData = pbItem.data(forType: .tiff) {
+                print("    ✅ Found TIFF data (\(tiffData.count) bytes)")
                 if let pngData = extractPNGFromTIFF(tiffData) {
                     if let url = savePNGToDiskAndReturnURL(data: pngData, source: sourceApp, bundleID: sourceBundleID) {
                         imageURLs.append(url)
                     }
                 }
+            } else {
+                print("    ❌ No image data found")
             }
         }
+        
+        print("📸 After loop: found \(imageURLs.count) images total")
         
         // Fallback: try NSImage if we got nothing from items
         if imageURLs.isEmpty && (types.contains(.tiff) || types.contains(.png)),
            NSImage.canInit(with: pasteboard),
            let image = NSImage(pasteboard: pasteboard),
            let data = renderImageToPNG(image) {
+            print("🔄 Fallback: using NSImage from pasteboard")
             if let url = savePNGToDiskAndReturnURL(data: data, source: sourceApp, bundleID: sourceBundleID) {
                 imageURLs.append(url)
             }
         }
         
         if !imageURLs.isEmpty {
+            print("💾 Creating image item with \(imageURLs.count) images:")
+            imageURLs.forEach { print("   - \($0.path)") }
+            
             // Create item(s) for images
             let item = ClipboardItem(
                 timestamp: Date(),
