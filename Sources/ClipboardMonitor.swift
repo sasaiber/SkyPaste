@@ -104,7 +104,7 @@ class ClipboardMonitor: ObservableObject {
                 firstCopiedAt: Date(),
                 type: .image,
                 textContent: imageURLs.map { $0.absoluteString }.joined(separator: "\n"),
-                title: imageURLs.count > 1 ? "\(imageURLs.count) images" : nil,
+                title: imageURLs.count > 1 ? "\(imageURLs.count) images" : "Image",
                 fileURL: imageURLs.first,
                 sizeLabel: "\(imageURLs.count) image\(imageURLs.count > 1 ? "s" : "")",
                 appSource: sourceApp,

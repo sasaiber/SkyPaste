@@ -87,8 +87,14 @@ class Storage: ObservableObject {
         saveItems()
     }
     
-    func clearUnpinnedText() {
-        items.removeAll { !$0.isPinned && $0.type == .text }
+    func clearUnpinnedText(folderID: UUID? = nil) {
+        if let folderID = folderID {
+            // Clear text items only in this folder
+            items.removeAll { !$0.isPinned && $0.type == .text && $0.folderID == folderID }
+        } else {
+            // Clear all text items globally (no folder)
+            items.removeAll { !$0.isPinned && $0.type == .text && $0.folderID == nil }
+        }
         saveItems()
     }
     

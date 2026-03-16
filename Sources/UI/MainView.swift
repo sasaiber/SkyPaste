@@ -146,7 +146,7 @@ struct MainView: View {
                         storage.clearUnpinned()
                     }
                     Button("Clear all text history", role: .destructive) {
-                        storage.clearUnpinnedText()
+                        storage.clearUnpinnedText(folderID: storage.selectedFolderID)
                     }
                 } label: {
                     Image(systemName: "trash")
