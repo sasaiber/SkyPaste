@@ -88,7 +88,7 @@ class Storage: ObservableObject {
     }
     
     func clearUnpinnedText() {
-        items.removeAll { !$0.isPinned && $0.type == .text && $0.folderID == nil }
+        items.removeAll { !$0.isPinned && $0.type == .text }
         saveItems()
     }
     
