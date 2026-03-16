@@ -67,16 +67,27 @@ class ClipboardMonitor: ObservableObject {
         }
 
         // 2. Images — read raw PNG/TIFF bytes, write to disk immediately
-        // Handle multiple images at once
+        // Handle multiple images at once - check ALL pasteboard items
         var imageURLs: [URL] = []
         
-        if let pngData = pasteboard.data(forType: .png) ?? extractPNGFromTIFF(pasteboard.data(forType: .tiff)) {
-            if let url = savePNGToDiskAndReturnURL(data: pngData, source: sourceApp, bundleID: sourceBundleID) {
-                imageURLs.append(url)
+        for pbItem in allItems {
+            // Try PNG first
+            if let pngData = pbItem.data(forType: .png) {
+                if let url = savePNGToDiskAndReturnURL(data: pngData, source: sourceApp, bundleID: sourceBundleID) {
+                    imageURLs.append(url)
+                }
+            }
+            // Try TIFF
+            else if let tiffData = pbItem.data(forType: .tiff) {
+                if let pngData = extractPNGFromTIFF(tiffData) {
+                    if let url = savePNGToDiskAndReturnURL(data: pngData, source: sourceApp, bundleID: sourceBundleID) {
+                        imageURLs.append(url)
+                    }
+                }
             }
         }
         
-        // Fallback: try NSImage (e.g. screenshots copied from Preview)
+        // Fallback: try NSImage if we got nothing from items
         if imageURLs.isEmpty && (types.contains(.tiff) || types.contains(.png)),
            NSImage.canInit(with: pasteboard),
            let image = NSImage(pasteboard: pasteboard),

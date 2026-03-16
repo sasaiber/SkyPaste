@@ -58,29 +58,25 @@ struct ClipboardItemRow: View {
                         .lineLimit(1)
                         .foregroundColor(.accentColor)
                     
-                    // Show thumbnails grid
+                    // Show thumbnails in horizontal scroll
                     let imageURLs = content.components(separatedBy: "\n")
                         .compactMap { URL(string: $0) }
                     
-                    HStack(spacing: 6) {
-                        ForEach(Array(imageURLs.prefix(3).enumerated()), id: \.offset) { _, url in
-                            if let thumbnail = NSImage(contentsOf: url) {
-                                Image(nsImage: thumbnail)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 28, height: 28)
-                                    .cornerRadius(4)
-                                    .clipped()
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(Array(imageURLs.enumerated()), id: \.offset) { _, url in
+                                if let nsImage = NSImage(contentsOf: url) {
+                                    Image(nsImage: nsImage)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 36, height: 36)
+                                        .cornerRadius(4)
+                                        .clipped()
+                                }
                             }
                         }
-                        if imageURLs.count > 3 {
-                            Text("+\(imageURLs.count - 3)")
-                                .font(.system(size: 10, weight: .semibold))
-                                .frame(width: 28, height: 28)
-                                .background(Color.accentColor.opacity(0.2))
-                                .cornerRadius(4)
-                        }
                     }
+                    .frame(height: 36)
                 } else if item.type == .image || (item.type == .file && isImageURL(item.fileURL)), 
                    let url = item.fileURL {
                     
@@ -297,22 +293,63 @@ struct ClipboardItemRow: View {
             
             // Content
             if item.type == .image, let title = item.title, title.hasSuffix("images"), let content = item.textContent {
-                // Multiple images
+                // Multiple images - show all with grid layout
                 let imageURLs = content.components(separatedBy: "\n")
                     .compactMap { URL(string: $0) }
                 
-                ScrollView {
-                    VStack(spacing: 8) {
-                        ForEach(Array(imageURLs.enumerated()), id: \.offset) { index, url in
-                            if let nsImage = NSImage(contentsOf: url) {
-                                Image(nsImage: nsImage)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(maxWidth: 350, maxHeight: 300)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundColor(.accentColor)
+                    
+                    ScrollView {
+                        VStack(spacing: 8) {
+                            let columns = [
+                                GridItem(.flexible()),
+                                GridItem(.flexible())
+                            ]
+                            LazyVGrid(columns: columns, spacing: 8) {
+                                ForEach(Array(imageURLs.enumerated()), id: \.offset) { index, url in
+                                    VStack(spacing: 4) {
+                                        if let nsImage = NSImage(contentsOf: url) {
+                                            Image(nsImage: nsImage)
+                                                .resizable()
+                                                .scaledToFill()
+                                                .frame(height: 120)
+                                                .cornerRadius(6)
+                                                .clipped()
+                                        }
+                                        Text("\(index + 1)")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
                             }
                         }
+                        .padding(6)
                     }
-                    .padding()
+                }
+                .padding()
+            } else if item.type == .image, let content = item.textContent {
+                // Single image stored with textContent (for backward compatibility)
+                let imageURLs = content.components(separatedBy: "\n")
+                    .compactMap { URL(string: $0) }
+                
+                if imageURLs.count > 1 {
+                    // Multiple images case
+                    ScrollView {
+                        VStack(spacing: 8) {
+                            ForEach(Array(imageURLs.enumerated()), id: \.offset) { _, url in
+                                if let nsImage = NSImage(contentsOf: url) {
+                                    Image(nsImage: nsImage)
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(maxWidth: 350, maxHeight: 300)
+                                }
+                            }
+                        }
+                        .padding()
+                    }
                 }
             } else if item.type == .image || (item.type == .file && isImageURL(item.fileURL)), 
                let url = item.fileURL, let nsImage = NSImage(contentsOf: url) {
