@@ -52,9 +52,11 @@ struct ClipboardItemRow: View {
             // 2. Main Content
             VStack(alignment: .leading, spacing: 2) {
                 if item.type == .image || (item.type == .file && isImageURL(item.fileURL)), 
-                   let url = item.fileURL, let nsImage = NSImage(contentsOf: url) {
+                   let url = item.fileURL {
                     
-                    Image(nsImage: nsImage)
+                    let thumbnail = getThumbnail(url: url)
+                    
+                    Image(nsImage: thumbnail)
                         .resizable()
                         .scaledToFill()
                         .frame(width: 36, height: 36)
@@ -315,5 +317,30 @@ struct ClipboardItemRow: View {
             return NSWorkspace.shared.icon(forFile: url.path)
         }
         return nil
+    }
+    
+    private func getThumbnail(url: URL) -> NSImage {
+        // Check cache first
+        if let cached = ImageCache.shared.image(for: url) {
+            return cached
+        }
+        
+        // Load and scale to thumbnail size (max 36x36)
+        guard let fullImage = NSImage(contentsOf: url) else {
+            return NSImage(systemSymbolName: "photo.fill", accessibilityDescription: nil) ?? NSImage()
+        }
+        
+        let thumbSize = NSSize(width: 36, height: 36)
+        let scaledImage = NSImage(size: thumbSize)
+        
+        scaledImage.lockFocus()
+        let rect = NSRect(origin: .zero, size: thumbSize)
+        fullImage.draw(in: rect, from: NSRect(origin: .zero, size: fullImage.size), operation: .copy, fraction: 1.0)
+        scaledImage.unlockFocus()
+        
+        // Cache it
+        ImageCache.shared.setImage(scaledImage, for: url)
+        
+        return scaledImage
     }
 }

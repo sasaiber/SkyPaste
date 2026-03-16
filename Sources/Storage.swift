@@ -66,6 +66,7 @@ class Storage: ObservableObject {
                 let old = items[lastIdx]
                 if let url = old.fileURL, url.path.contains("SkyPaste/Images") {
                     try? fileManager.removeItem(at: url)
+                    ImageCache.shared.removeImage(for: url)
                 }
                 items.remove(at: lastIdx)
             } else { break }
@@ -79,6 +80,7 @@ class Storage: ObservableObject {
         for item in toDelete {
             if let url = item.fileURL, url.path.contains("SkyPaste/Images") {
                 try? fileManager.removeItem(at: url)
+                ImageCache.shared.removeImage(for: url)
             }
         }
         items.removeAll { !$0.isPinned && $0.folderID == nil }
@@ -111,6 +113,7 @@ class Storage: ObservableObject {
         for item in toDelete {
             if let url = item.fileURL, url.path.contains("SkyPaste/Images") {
                 try? fileManager.removeItem(at: url)
+                ImageCache.shared.removeImage(for: url)
             }
         }
         items.removeAll { $0.folderID == id }
@@ -161,6 +164,7 @@ class Storage: ObservableObject {
             let item = items[index]
             if let url = item.fileURL, url.path.contains("SkyPaste/Images") {
                 try? fileManager.removeItem(at: url)
+                ImageCache.shared.removeImage(for: url)
             }
             items.remove(at: index)
             saveItems()
@@ -190,7 +194,8 @@ class Storage: ObservableObject {
             let toDelete = items.filter { !$0.isPinned && $0.timestamp < cutoff }
             for item in toDelete {
                 if let url = item.fileURL, url.path.contains("SkyPaste/Images") { 
-                    try? fileManager.removeItem(at: url) 
+                    try? fileManager.removeItem(at: url)
+                    ImageCache.shared.removeImage(for: url)
                 }
             }
             items.removeAll { !$0.isPinned && $0.timestamp < cutoff }
@@ -209,6 +214,7 @@ class Storage: ObservableObject {
                 if let url = item.fileURL, url.path.contains("SkyPaste/Images"), let attr = try? fileManager.attributesOfItem(atPath: url.path), let size = attr[.size] as? Double {
                     currentSize -= size / (1024 * 1024)
                     try? fileManager.removeItem(at: url)
+                    ImageCache.shared.removeImage(for: url)
                 }
                 items.remove(at: lastUnpinned)
             }

@@ -114,7 +114,10 @@ class ClipboardMonitor: ObservableObject {
     private func extractPNGFromTIFF(_ tiffData: Data?) -> Data? {
         guard let data = tiffData,
               let rep = NSBitmapImageRep(data: data) else { return nil }
-        return rep.representation(using: .png, properties: [:])
+        
+        // Optimize image size if too large
+        let optimized = optimizeImage(rep)
+        return optimized.representation(using: .png, properties: [.compressionFactor: 0.8])
     }
 
     private func renderImageToPNG(_ image: NSImage) -> Data? {
@@ -127,11 +130,55 @@ class ClipboardMonitor: ObservableObject {
             colorSpaceName: .calibratedRGB,
             bytesPerRow: 0, bitsPerPixel: 0
         ), let ctx = NSGraphicsContext(bitmapImageRep: rep) else { return nil }
+        
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = ctx
         image.draw(in: rect)
         NSGraphicsContext.restoreGraphicsState()
-        return rep.representation(using: .png, properties: [:])
+        
+        // Optimize and compress
+        let optimized = optimizeImage(rep)
+        return optimized.representation(using: .png, properties: [.compressionFactor: 0.8])
+    }
+    
+    private func optimizeImage(_ rep: NSBitmapImageRep) -> NSBitmapImageRep {
+        let maxWidth: Int = 2000
+        let maxHeight: Int = 2000
+        let maxFileSize: Int = 5 * 1024 * 1024 // 5 MB
+        
+        var currentRep = rep
+        let currentSize = rep.representation(using: .png, properties: [:])?.count ?? 0
+        
+        // Downscale if too large
+        if rep.pixelsWide > maxWidth || rep.pixelsHigh > maxHeight || currentSize > maxFileSize {
+            let scale = min(
+                Double(maxWidth) / Double(rep.pixelsWide),
+                Double(maxHeight) / Double(rep.pixelsHigh),
+                1.0
+            )
+            
+            let newWidth = Int(Double(rep.pixelsWide) * scale)
+            let newHeight = Int(Double(rep.pixelsHigh) * scale)
+            
+            if let scaled = rep.representation(using: .png, properties: [:]),
+               let scaledImage = NSImage(data: scaled) {
+                scaledImage.size = NSSize(width: newWidth, height: newHeight)
+                if let newRep = NSBitmapImageRep(bitmapDataPlanes: nil,
+                                                  pixelsWide: newWidth, pixelsHigh: newHeight,
+                                                  bitsPerSample: 8, samplesPerPixel: 4,
+                                                  hasAlpha: true, isPlanar: false,
+                                                  colorSpaceName: .calibratedRGB,
+                                                  bytesPerRow: 0, bitsPerPixel: 0),
+                   let ctx = NSGraphicsContext(bitmapImageRep: newRep) {
+                    NSGraphicsContext.current = ctx
+                    scaledImage.draw(in: NSRect(origin: .zero, size: NSSize(width: newWidth, height: newHeight)))
+                    NSGraphicsContext.restoreGraphicsState()
+                    currentRep = newRep
+                }
+            }
+        }
+        
+        return currentRep
     }
 
     private func savePNGToDisk(data: Data, source: String, bundleID: String?) {
