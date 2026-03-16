@@ -56,6 +56,48 @@ class ClipboardMonitor: ObservableObject {
 
         if !fileURLs.isEmpty {
             print("✅ Found \(fileURLs.count) files")
+            
+            // Check if ALL files are images - if so, treat as images not files!
+            let imageFiles = fileURLs.filter { isImageFile($0) }
+            if imageFiles.count == fileURLs.count && !imageFiles.isEmpty {
+                print("📸 All files are images! Converting to image items...")
+                
+                var imageURLs: [URL] = []
+                for imgURL in imageFiles {
+                    guard let image = NSImage(contentsOf: imgURL) else {
+                        print("  ❌ Failed to load: \(imgURL.lastPathComponent)")
+                        continue
+                    }
+                    print("  ✅ Loaded image: \(imgURL.lastPathComponent)")
+                    
+                    // Save as PNG
+                    if let data = renderImageToPNG(image) {
+                        if let url = savePNGToDiskAndReturnURL(data: data, source: sourceApp, bundleID: sourceBundleID) {
+                            imageURLs.append(url)
+                        }
+                    }
+                }
+                
+                if !imageURLs.isEmpty {
+                    print("💾 Created image item with \(imageURLs.count) images")
+                    let item = ClipboardItem(
+                        timestamp: Date(),
+                        firstCopiedAt: Date(),
+                        type: .image,
+                        textContent: imageURLs.map { $0.absoluteString }.joined(separator: "\n"),
+                        title: imageURLs.count > 1 ? "\(imageURLs.count) images" : "Image",
+                        fileURL: imageURLs.first,
+                        sizeLabel: "\(imageURLs.count) image\(imageURLs.count > 1 ? "s" : "")",
+                        appSource: sourceApp,
+                        appBundleID: sourceBundleID
+                    )
+                    Task { @MainActor in storage.addItem(item) }
+                    return
+                }
+            }
+            
+            // Not all images, treat as regular files
+            print("📁 Treating as files (not all are images)")
             // Store all files as a single clipboard item
             let item = ClipboardItem(
                 timestamp: Date(), 
@@ -264,6 +306,12 @@ class ClipboardMonitor: ObservableObject {
             print("❌ Failed to save image: \(error)")
             return nil
         }
+    }
+    
+    private func isImageFile(_ url: URL) -> Bool {
+        let imageExtensions = ["png", "jpg", "jpeg", "gif", "tiff", "bmp", "webp", "heic"]
+        let pathExtension = url.pathExtension.lowercased()
+        return imageExtensions.contains(pathExtension)
     }
 
     // MARK: - Pasteboard write-back
