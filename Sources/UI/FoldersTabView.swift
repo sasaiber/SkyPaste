@@ -12,6 +12,7 @@ struct FoldersTabView: View {
     @State private var newFolderName = ""
     @State private var newFolderEmoji = "📁"
     @State private var newFolderColor = Color.accentColor
+    @State private var showEmojiPicker = false
     
     var body: some View {
         createSection
@@ -48,22 +49,20 @@ struct FoldersTabView: View {
     
     @ViewBuilder
     private var emojiPicker: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.secondary.opacity(0.12))
-                .frame(width: 36, height: 36)
-            Text(newFolderEmoji.isEmpty ? "📁" : newFolderEmoji)
-                .font(.title3)
-            TextField("", text: $newFolderEmoji)
-                .opacity(0.01)
-                .frame(width: 36, height: 36)
-                .onChange(of: newFolderEmoji) { _, nv in
-                    // Keep only the last emoji character entered
-                    let emojis = nv.filter { $0.isEmoji }
-                    newFolderEmoji = emojis.last.map { String($0) } ?? (nv.isEmpty ? "" : "📁")
-                }
+        Button(action: { showEmojiPicker = true }) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.secondary.opacity(0.12))
+                    .frame(width: 36, height: 36)
+                Text(newFolderEmoji.isEmpty ? "📁" : newFolderEmoji)
+                    .font(.title3)
+            }
+            .frame(width: 36, height: 36)
         }
-        .frame(width: 36, height: 36)
+        .buttonStyle(.plain)
+        .popover(isPresented: $showEmojiPicker) {
+            EmojiPickerView(selectedEmoji: $newFolderEmoji)
+        }
     }
     
     @ViewBuilder
@@ -135,13 +134,5 @@ struct FoldersTabView: View {
             }
             .buttonStyle(.plain)
         }
-    }
-}
-
-private extension Character {
-    var isEmoji: Bool {
-        unicodeScalars.first.map {
-            $0.properties.isEmoji && $0.value > 0x30
-        } ?? false
     }
 }

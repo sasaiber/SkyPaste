@@ -8,6 +8,7 @@ struct FolderEditView: View {
     @State private var editedName: String
     @State private var editedEmoji: String
     @State private var editedColor: Color
+    @State private var showEmojiPicker = false
     
     init(folder: AppFolder, storage: Storage) {
         self.folder = folder
@@ -35,29 +36,13 @@ struct FolderEditView: View {
                     Text(editedEmoji.isEmpty ? "📁" : editedEmoji)
                         .font(.largeTitle)
                         .frame(width: 52, height: 52)
-                    // Invisible emoji picker overlay
-                    TextField("", text: $editedEmoji)
-                        .opacity(0.01)
-                        .frame(width: 52, height: 52)
-                        .onChange(of: editedEmoji) { _, newValue in
-                            // Extract only emoji characters (preserving emoji with modifiers)
-                            let emojiCharacters = newValue.filter { char in
-                                char.unicodeScalars.allSatisfy { $0.properties.isEmoji }
-                            }
-                            
-                            if !emojiCharacters.isEmpty {
-                                // Keep only the last emoji
-                                if let lastEmoji = emojiCharacters.last {
-                                    editedEmoji = String(lastEmoji)
-                                }
-                            } else if newValue.isEmpty {
-                                // Allow clearing the field
-                                editedEmoji = ""
-                            } else {
-                                // User entered non-emoji text, keep previous value
-                                editedEmoji = folder.emoji ?? "📁"
-                            }
-                        }
+                }
+                .frame(width: 52, height: 52)
+                .onTapGesture {
+                    showEmojiPicker = true
+                }
+                .popover(isPresented: $showEmojiPicker) {
+                    EmojiPickerView(selectedEmoji: $editedEmoji)
                 }
                 
                 VStack(alignment: .leading, spacing: 8) {
@@ -68,7 +53,7 @@ struct FolderEditView: View {
                     HStack {
                         ColorPicker("Color:", selection: $editedColor)
                             .labelsHidden()
-                        Text("Tap the emoji to change it")
+                        Text("Tap emoji to change")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
