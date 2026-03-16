@@ -41,6 +41,10 @@ class ClipboardMonitor: ObservableObject {
 
         let allItems = pasteboard.pasteboardItems ?? []
         let types = Set(pasteboard.types ?? [])
+        
+        print("\n🔍 CLIPBOARD SNAPSHOT:")
+        print("  pasteboardItems count: \(allItems.count)")
+        print("  pasteboardTypes: \(types)")
 
         // 1. Multi-file / single-file: collect ALL file URLs from every pasteboard item
         let fileURLs: [URL] = allItems.compactMap { pbItem in
@@ -51,6 +55,7 @@ class ClipboardMonitor: ObservableObject {
         }
 
         if !fileURLs.isEmpty {
+            print("✅ Found \(fileURLs.count) files")
             // Store all files as a single clipboard item
             let item = ClipboardItem(
                 timestamp: Date(), 
@@ -66,50 +71,49 @@ class ClipboardMonitor: ObservableObject {
             return
         }
 
-        // 2. Images — read raw PNG/TIFF bytes, write to disk immediately
-        // Handle multiple images at once - check ALL pasteboard items
+        // 2. Images — try MANY ways to extract ALL images
         var imageURLs: [URL] = []
         
-        print("📋 Processing pasteboard - total items: \(allItems.count)")
+        print("📋 Processing images from \(allItems.count) pasteboard items...")
         
+        // Method 1: Direct iteration through pasteboardItems
         for (idx, pbItem) in allItems.enumerated() {
-            print("  Item \(idx): checking for image types...")
-            // Try PNG first
+            print("  Item \(idx): types = \(pbItem.types)")
+            
             if let pngData = pbItem.data(forType: .png) {
-                print("    ✅ Found PNG data (\(pngData.count) bytes)")
+                print("    ✅ Found PNG (\(pngData.count) bytes)")
                 if let url = savePNGToDiskAndReturnURL(data: pngData, source: sourceApp, bundleID: sourceBundleID) {
                     imageURLs.append(url)
                 }
-            }
-            // Try TIFF
-            else if let tiffData = pbItem.data(forType: .tiff) {
-                print("    ✅ Found TIFF data (\(tiffData.count) bytes)")
+            } else if let tiffData = pbItem.data(forType: .tiff) {
+                print("    ✅ Found TIFF (\(tiffData.count) bytes)")
                 if let pngData = extractPNGFromTIFF(tiffData) {
                     if let url = savePNGToDiskAndReturnURL(data: pngData, source: sourceApp, bundleID: sourceBundleID) {
                         imageURLs.append(url)
                     }
                 }
-            } else {
-                print("    ❌ No image data found")
+            } else if let jpgData = pbItem.data(forType: NSPasteboard.PasteboardType(rawValue: "public.jpeg")) {
+                print("    ✅ Found JPEG (\(jpgData.count) bytes)")
+                if let url = savePNGToDiskAndReturnURL(data: jpgData, source: sourceApp, bundleID: sourceBundleID) {
+                    imageURLs.append(url)
+                }
             }
         }
         
-        print("📸 After loop: found \(imageURLs.count) images total")
-        
-        // Fallback: try NSImage if we got nothing from items
+        // Method 2: Try NSImage fallback if nothing found
         if imageURLs.isEmpty && (types.contains(.tiff) || types.contains(.png)),
            NSImage.canInit(with: pasteboard),
            let image = NSImage(pasteboard: pasteboard),
            let data = renderImageToPNG(image) {
-            print("🔄 Fallback: using NSImage from pasteboard")
+            print("🔄 Fallback: NSImage from pasteboard (\(data.count) bytes)")
             if let url = savePNGToDiskAndReturnURL(data: data, source: sourceApp, bundleID: sourceBundleID) {
                 imageURLs.append(url)
             }
         }
         
         if !imageURLs.isEmpty {
-            print("💾 Creating image item with \(imageURLs.count) images:")
-            imageURLs.forEach { print("   - \($0.path)") }
+            print("💾 FINAL: Created image item with \(imageURLs.count) images")
+            imageURLs.forEach { print("   - \($0.lastPathComponent)") }
             
             // Create item(s) for images
             let item = ClipboardItem(

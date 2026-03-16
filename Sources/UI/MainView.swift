@@ -62,6 +62,31 @@ struct MainView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // DEBUG: Show pasteboard contents
+            HStack(spacing: 4) {
+                Text("🔍 Pasteboard:")
+                    .font(.system(size: 10, weight: .semibold))
+                let pb = NSPasteboard.general
+                let items = pb.pasteboardItems ?? []
+                Text("Items: \(items.count)")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+                let types = pb.types ?? []
+                Text("Types: \(types.count)")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button("Refresh") {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        storage.items = storage.items
+                    }
+                }
+                .font(.system(size: 10))
+            }
+            .padding(8)
+            .background(Color.yellow.opacity(0.1))
+            Divider()
+            
             // Folder Banner
             if let activeFolder = storage.folders.first(where: { $0.id == storage.selectedFolderID }) {
                 HStack(spacing: 8) {
