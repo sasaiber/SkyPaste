@@ -68,24 +68,23 @@ struct ClipboardItemRow: View {
                         ScrollView(.horizontal, showsIndicators: true) {
                             HStack(spacing: 6) {
                                 ForEach(Array(imageURLs.enumerated()), id: \.offset) { idx, url in
-                                    if let nsImage = NSImage(contentsOf: url) {
-                                        Image(nsImage: nsImage)
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 48, height: 48)
-                                            .cornerRadius(6)
-                                            .clipped()
-                                            .overlay(
-                                                Text("\(idx + 1)")
-                                                    .font(.system(size: 10, weight: .bold))
-                                                    .foregroundColor(.white)
-                                                    .padding(4)
-                                                    .background(Color.black.opacity(0.6))
-                                                    .cornerRadius(3)
-                                                    .padding(4),
-                                                alignment: .topTrailing
-                                            )
-                                    }
+                                    let nsImage = ImageCache.shared.image(for: url) ?? getThumbnail(url: url)
+                                    Image(nsImage: nsImage)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 48, height: 48)
+                                        .cornerRadius(6)
+                                        .clipped()
+                                        .overlay(
+                                            Text("\(idx + 1)")
+                                                .font(.system(size: 10, weight: .bold))
+                                                .foregroundColor(.white)
+                                                .padding(4)
+                                                .background(Color.black.opacity(0.6))
+                                                .cornerRadius(3)
+                                                .padding(4),
+                                            alignment: .topTrailing
+                                        )
                                 }
                             }
                             .padding(.vertical, 4)
