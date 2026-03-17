@@ -38,12 +38,7 @@ extension AppDelegate: NSPopoverDelegate {
             NSEvent.removeMonitor(monitor)
             outsideClickMonitor = nil
         }
-        
-        // Important: Clear the content view controller to break retain cycles
-        // when popover closes. This prevents memory leaks.
-        DispatchQueue.main.async { [weak self] in
-            self?.popover.contentViewController = nil
-        }
+        // Don't clear contentViewController - reuse it for faster reopening
     }
 }
 
@@ -131,7 +126,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if self.popover.isShown {
             self.popover.performClose(sender)
         } else {
-            // Recreate the content view controller if it was cleared
+            // Ensure content view controller exists (reuse if possible)
             if self.popover.contentViewController == nil {
                 let mainView = MainView(storage: self.globalStore)
                 self.popover.contentViewController = NSHostingController(rootView: mainView)
@@ -141,7 +136,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             switch position {
             case "statusItem":
                 if let button = self.statusBarItem.button {
-                    // Create a dummy window at button location for proper positioning
+                    // Get button frame in screen coordinates
                     let buttonFrame = button.window?.convertToScreen(button.frame) ?? button.frame
                     let dummyWindow = NSWindow(contentRect: buttonFrame,
                                                styleMask: .borderless,
@@ -157,8 +152,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         self.popover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
                     }
                     
-                    // Keep window alive while popover is shown
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                    // Close dummy window when popover closes
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
                         if let self = self, !self.popover.isShown {
                             dummyWindow.close()
                         }

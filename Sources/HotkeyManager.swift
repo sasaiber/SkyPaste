@@ -24,14 +24,13 @@ class WindowManager {
         dummyWindow.makeKeyAndOrderFront(nil)
         
         if let view = dummyWindow.contentView {
-            // Show popover below cursor, with some offset
             popover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
         }
         
-        // Keep window alive while popover is shown
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak popover, weak dummyWindow] in
-            if let popover = popover, !popover.isShown, let window = dummyWindow {
-                window.close()
+        // Close window immediately after popover is shown
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak popover] in
+            if let popover = popover, !popover.isShown {
+                dummyWindow.close()
             }
         }
         
@@ -68,10 +67,10 @@ class WindowManager {
             popover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
         }
         
-        // Keep window alive while popover is shown
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak popover, weak dummyWindow] in
-            if let popover = popover, !popover.isShown, let window = dummyWindow {
-                window.close()
+        // Close window immediately after popover is shown
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak popover] in
+            if let popover = popover, !popover.isShown {
+                dummyWindow.close()
             }
         }
         
