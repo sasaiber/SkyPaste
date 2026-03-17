@@ -42,6 +42,7 @@ class Storage: ObservableObject {
     
     func addItem(_ item: ClipboardItem) {
         let maxItems = 500
+        
         // Deduplicate plain text
         if item.type == .text, let t = item.textContent, let index = items.firstIndex(where: { $0.textContent == t }) {
             var existing = items[index]
@@ -55,6 +56,57 @@ class Storage: ObservableObject {
             }
             scheduleSave()
             return
+        }
+        
+        // Deduplicate images by comparing textContent (contains all image URLs)
+        if item.type == .image, let content = item.textContent, !content.isEmpty {
+            if let index = items.firstIndex(where: { $0.type == .image && $0.textContent == content }) {
+                var existing = items[index]
+                existing.timestamp = Date()
+                existing.copyCount = (existing.copyCount ?? 1) + 1
+                items.remove(at: index)
+                if existing.isPinned {
+                    items.insert(existing, at: index)
+                } else {
+                    items.insert(existing, at: 0)
+                }
+                scheduleSave()
+                return
+            }
+        }
+        
+        // Deduplicate files by comparing textContent (contains all file URLs)
+        if item.type == .file, let content = item.textContent, !content.isEmpty {
+            if let index = items.firstIndex(where: { $0.type == .file && $0.textContent == content }) {
+                var existing = items[index]
+                existing.timestamp = Date()
+                existing.copyCount = (existing.copyCount ?? 1) + 1
+                items.remove(at: index)
+                if existing.isPinned {
+                    items.insert(existing, at: index)
+                } else {
+                    items.insert(existing, at: 0)
+                }
+                scheduleSave()
+                return
+            }
+        }
+        
+        // Deduplicate links
+        if item.type == .link, let link = item.textContent, !link.isEmpty {
+            if let index = items.firstIndex(where: { $0.type == .link && $0.textContent == link }) {
+                var existing = items[index]
+                existing.timestamp = Date()
+                existing.copyCount = (existing.copyCount ?? 1) + 1
+                items.remove(at: index)
+                if existing.isPinned {
+                    items.insert(existing, at: index)
+                } else {
+                    items.insert(existing, at: 0)
+                }
+                scheduleSave()
+                return
+            }
         }
         
         items.insert(item, at: 0)

@@ -56,7 +56,16 @@ struct ClipboardItemRow: View {
                 if item.type == .image, let content = item.textContent {
                     let imageURLs = content.components(separatedBy: "\n")
                         .filter { !$0.isEmpty }
-                        .compactMap { URL(string: $0) }
+                        .compactMap { urlString -> URL? in
+                            if let url = URL(string: urlString) {
+                                // Convert file:// URL to proper path
+                                if url.scheme == "file" {
+                                    return url
+                                }
+                            }
+                            // Fallback: try as file path
+                            return URL(fileURLWithPath: urlString)
+                        }
                     
                     if imageURLs.count > 0 {
                         if let title = item.title {
@@ -66,33 +75,32 @@ struct ClipboardItemRow: View {
                                 .foregroundColor(.accentColor)
                         }
                         
-                        // Show ALL thumbnails in horizontal scroll (works for 1 or many)
-                        ScrollView(.horizontal, showsIndicators: true) {
-                            HStack(spacing: 6) {
-                                ForEach(Array(imageURLs.enumerated()), id: \.offset) { idx, url in
-                                    let nsImage = ImageCache.shared.image(for: url) ?? getThumbnail(url: url)
-                                    Image(nsImage: nsImage)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 48, height: 48)
-                                        .cornerRadius(6)
-                                        .clipped()
-                                        .background(Color.gray.opacity(0.2))
-                                        .overlay(
-                                            Text("\(idx + 1)")
-                                                .font(.system(size: 10, weight: .bold))
-                                                .foregroundColor(.white)
-                                                .padding(4)
-                                                .background(Color.black.opacity(0.6))
-                                                .cornerRadius(3)
-                                                .padding(4),
-                                            alignment: .topTrailing
-                                        )
-                                }
-                            }
-                            .padding(.vertical, 4)
+                        // Show file paths
+                        if imageURLs.count == 1 {
+                            Text(imageURLs[0].path)
+                                .font(.system(size: 9, design: .monospaced))
+                                .lineLimit(1)
+                                .foregroundColor(.secondary)
+                                .truncationMode(.middle)
+                        } else {
+                            Text(imageURLs.map { $0.lastPathComponent }.joined(separator: ", "))
+                                .font(.system(size: 9, design: .monospaced))
+                                .lineLimit(1)
+                                .foregroundColor(.secondary)
+                                .truncationMode(.tail)
                         }
-                        .frame(height: 64)
+                        
+                        // Show first thumbnail only
+                        if let firstURL = imageURLs.first {
+                            let nsImage = ImageCache.shared.image(for: firstURL) ?? getThumbnail(url: firstURL)
+                            Image(nsImage: nsImage)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 48, height: 48)
+                                .cornerRadius(6)
+                                .clipped()
+                                .background(Color.gray.opacity(0.2))
+                        }
                     }
                 } else if item.type == .image || (item.type == .file && isImageURL(item.fileURL)), 
                    let url = item.fileURL {
@@ -309,72 +317,144 @@ struct ClipboardItemRow: View {
             Divider()
             
             // Content
-            if item.type == .image, let title = item.title, title.hasSuffix("images"), let content = item.textContent {
-                // Multiple images - show all with grid layout
+            if item.type == .image, let content = item.textContent {
+                // Parse image URLs properly
                 let imageURLs = content.components(separatedBy: "\n")
-                    .compactMap { URL(string: $0) }
+                    .filter { !$0.isEmpty }
+                    .compactMap { urlString -> URL? in
+                        if let url = URL(string: urlString) {
+                            if url.scheme == "file" {
+                                return url
+                            }
+                        }
+                        return URL(fileURLWithPath: urlString)
+                    }
                 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(title)
-                        .font(.headline)
-                        .foregroundColor(.accentColor)
-                    
-                    ScrollView {
-                        VStack(spacing: 8) {
-                            let columns = [
-                                GridItem(.flexible()),
-                                GridItem(.flexible())
-                            ]
-                            LazyVGrid(columns: columns, spacing: 8) {
+                if !imageURLs.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if let title = item.title {
+                            Text(title)
+                                .font(.headline)
+                                .foregroundColor(.accentColor)
+                                .padding(.horizontal)
+                        }
+                        
+                        // Vertical scroll with one image per view (large preview)
+                        ScrollView(.vertical, showsIndicators: true) {
+                            VStack(spacing: 16) {
                                 ForEach(Array(imageURLs.enumerated()), id: \.offset) { index, url in
-                                    VStack(spacing: 4) {
+                                    VStack(spacing: 8) {
                                         if let nsImage = NSImage(contentsOf: url) {
                                             Image(nsImage: nsImage)
                                                 .resizable()
-                                                .scaledToFill()
-                                                .frame(height: 120)
-                                                .cornerRadius(6)
-                                                .clipped()
+                                                .scaledToFit()
+                                                .frame(maxWidth: 420, maxHeight: 350)
+                                                .cornerRadius(8)
+                                                .shadow(radius: 2)
+                                        } else {
+                                            // Fallback if image fails to load
+                                            VStack {
+                                                Image(systemName: "photo.fill")
+                                                    .font(.system(size: 48))
+                                                    .foregroundColor(.secondary)
+                                                Text("Failed to load image")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                Text(url.path)
+                                                    .font(.system(size: 9, design: .monospaced))
+                                                    .foregroundColor(.secondary)
+                                                    .lineLimit(2)
+                                            }
+                                            .frame(maxWidth: 420, maxHeight: 200)
+                                            .background(Color.gray.opacity(0.1))
+                                            .cornerRadius(8)
                                         }
-                                        Text("\(index + 1)")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
+                                        
+                                        // Image counter, filename and full path
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            HStack {
+                                                Text("\(index + 1) / \(imageURLs.count)")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                Spacer()
+                                                Text(url.lastPathComponent)
+                                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                                    .foregroundColor(.primary)
+                                                    .lineLimit(1)
+                                            }
+                                            
+                                            // Full path with copy button
+                                            HStack(spacing: 4) {
+                                                Text(url.path)
+                                                    .font(.system(size: 9, design: .monospaced))
+                                                    .foregroundColor(.secondary)
+                                                    .textSelection(.enabled)
+                                                    .lineLimit(2)
+                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                                
+                                                Button(action: {
+                                                    NSPasteboard.general.clearContents()
+                                                    NSPasteboard.general.setString(url.path, forType: .string)
+                                                }) {
+                                                    Image(systemName: "doc.on.doc")
+                                                        .font(.system(size: 10))
+                                                }
+                                                .buttonStyle(.plain)
+                                                .foregroundColor(.secondary)
+                                                .help("Copy path")
+                                            }
+                                        }
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.secondary.opacity(0.05))
+                                        .cornerRadius(6)
                                     }
                                 }
                             }
+                            .padding()
                         }
-                        .padding(6)
-                    }
-                }
-                .padding()
-            } else if item.type == .image, let content = item.textContent {
-                // Single image stored with textContent (for backward compatibility)
-                let imageURLs = content.components(separatedBy: "\n")
-                    .compactMap { URL(string: $0) }
-                
-                if imageURLs.count > 1 {
-                    // Multiple images case
-                    ScrollView {
-                        VStack(spacing: 8) {
-                            ForEach(Array(imageURLs.enumerated()), id: \.offset) { _, url in
-                                if let nsImage = NSImage(contentsOf: url) {
-                                    Image(nsImage: nsImage)
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(maxWidth: 350, maxHeight: 300)
-                                }
-                            }
-                        }
-                        .padding()
                     }
                 }
             } else if item.type == .image || (item.type == .file && isImageURL(item.fileURL)), 
                let url = item.fileURL, let nsImage = NSImage(contentsOf: url) {
-                Image(nsImage: nsImage)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: 400, maxHeight: 400)
-                    .padding()
+                VStack(spacing: 8) {
+                    Image(nsImage: nsImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 400, maxHeight: 400)
+                    
+                    // Show full path for single image
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(url.lastPathComponent)
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundColor(.primary)
+                        
+                        HStack(spacing: 4) {
+                            Text(url.path)
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundColor(.secondary)
+                                .textSelection(.enabled)
+                                .lineLimit(2)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            
+                            Button(action: {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(url.path, forType: .string)
+                            }) {
+                                Image(systemName: "doc.on.doc")
+                                    .font(.system(size: 10))
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundColor(.secondary)
+                            .help("Copy path")
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.secondary.opacity(0.05))
+                    .cornerRadius(6)
+                }
+                .padding()
             } else if item.type == .file {
                 VStack(alignment: .leading, spacing: 8) {
                     // Check if multiple files
@@ -487,17 +567,8 @@ struct ClipboardItemRow: View {
             return cached
         }
         
-        // Try to load image - NSImage(contentsOf:) is the best way
-        var fullImage: NSImage?
-        if url.scheme == "file" {
-            // It's a file URL, load from path
-            fullImage = NSImage(contentsOf: url)
-        } else {
-            // Try direct URL
-            fullImage = NSImage(contentsOf: url)
-        }
-        
-        guard let image = fullImage else {
+        // Load image from file URL
+        guard let fullImage = NSImage(contentsOf: url) else {
             print("❌ Failed to load image from: \(url.path)")
             return NSImage(systemSymbolName: "photo.fill", accessibilityDescription: nil) ?? NSImage()
         }
@@ -511,7 +582,7 @@ struct ClipboardItemRow: View {
         scaledImage.lockFocus()
         NSColor.white.setFill()
         NSBezierPath(rect: NSRect(origin: .zero, size: thumbSize)).fill()
-        image.draw(in: NSRect(origin: .zero, size: thumbSize))
+        fullImage.draw(in: NSRect(origin: .zero, size: thumbSize))
         scaledImage.unlockFocus()
         
         // Cache it

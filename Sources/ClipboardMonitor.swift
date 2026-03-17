@@ -327,22 +327,40 @@ class ClipboardMonitor: ObservableObject {
             }
         case .image:
             // Support multi-image record (URLs stored newline-separated in textContent)
-            if let joined = item.textContent, item.title?.hasSuffix("images") == true {
-                let imageURLs: [NSURL] = joined
+            if let joined = item.textContent {
+                let imageURLs: [URL] = joined
                     .components(separatedBy: "\n")
-                    .compactMap { URL(string: $0) as NSURL? }
-                let images = imageURLs.compactMap { NSImage(contentsOf: $0 as URL) }
-                pasteboard.writeObjects(images)
+                    .filter { !$0.isEmpty }
+                    .compactMap { urlString -> URL? in
+                        if let url = URL(string: urlString) {
+                            if url.scheme == "file" {
+                                return url
+                            }
+                        }
+                        return URL(fileURLWithPath: urlString)
+                    }
+                let images = imageURLs.compactMap { NSImage(contentsOf: $0) }
+                if !images.isEmpty {
+                    pasteboard.writeObjects(images)
+                }
             } else if let url = item.fileURL, let img = NSImage(contentsOf: url) {
                 pasteboard.writeObjects([img])
             }
         case .file:
             // Support multi-file record (URLs stored newline-separated in textContent)
-            if let joined = item.textContent, item.title?.hasSuffix("files") == true {
-                let urls: [NSURL] = joined
+            if let joined = item.textContent {
+                let urls: [URL] = joined
                     .components(separatedBy: "\n")
-                    .compactMap { URL(string: $0) as NSURL? }
-                pasteboard.writeObjects(urls)
+                    .filter { !$0.isEmpty }
+                    .compactMap { urlString -> URL? in
+                        if let url = URL(string: urlString) {
+                            if url.scheme == "file" {
+                                return url
+                            }
+                        }
+                        return URL(fileURLWithPath: urlString)
+                    }
+                pasteboard.writeObjects(urls as [NSURL])
             } else if let url = item.fileURL {
                 pasteboard.writeObjects([url as NSURL])
             }
