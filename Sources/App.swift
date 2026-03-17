@@ -141,7 +141,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             switch position {
             case "statusItem":
                 if let button = self.statusBarItem.button {
-                    self.popover.show(relativeTo: button.bounds, of: button, preferredEdge: NSRectEdge.minY)
+                    // Create a dummy window at button location for proper positioning
+                    let buttonFrame = button.window?.convertToScreen(button.frame) ?? button.frame
+                    let dummyWindow = NSWindow(contentRect: buttonFrame,
+                                               styleMask: .borderless,
+                                               backing: .buffered,
+                                               defer: false)
+                    dummyWindow.backgroundColor = .clear
+                    dummyWindow.isOpaque = false
+                    dummyWindow.hasShadow = false
+                    dummyWindow.level = .floating
+                    dummyWindow.makeKeyAndOrderFront(nil)
+                    
+                    if let view = dummyWindow.contentView {
+                        self.popover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
+                    }
+                    
+                    // Keep window alive while popover is shown
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                        if let self = self, !self.popover.isShown {
+                            dummyWindow.close()
+                        }
+                    }
                 } else {
                     WindowManager.shared.showPopoverAtCursor(popover: popover)
                 }

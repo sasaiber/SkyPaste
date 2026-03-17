@@ -24,14 +24,14 @@ class WindowManager {
         dummyWindow.makeKeyAndOrderFront(nil)
         
         if let view = dummyWindow.contentView {
-            popover.show(relativeTo: view.bounds, of: view, preferredEdge: .maxY)
+            // Show popover below cursor, with some offset
+            popover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
         }
         
-        // Use DispatchQueue to close window after popover closes
-        // This avoids NotificationCenter observer leaks
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak popover] in
-            if let popover = popover, !popover.isShown {
-                dummyWindow.close()
+        // Keep window alive while popover is shown
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak popover, weak dummyWindow] in
+            if let popover = popover, !popover.isShown, let window = dummyWindow {
+                window.close()
             }
         }
         
@@ -65,14 +65,13 @@ class WindowManager {
         dummyWindow.makeKeyAndOrderFront(nil)
         
         if let view = dummyWindow.contentView {
-            popover.show(relativeTo: view.bounds, of: view, preferredEdge: .maxY)
+            popover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
         }
         
-        // Use DispatchQueue to close window after popover closes
-        // This avoids NotificationCenter observer leaks
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak popover] in
-            if let popover = popover, !popover.isShown {
-                dummyWindow.close()
+        // Keep window alive while popover is shown
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak popover, weak dummyWindow] in
+            if let popover = popover, !popover.isShown, let window = dummyWindow {
+                window.close()
             }
         }
         
