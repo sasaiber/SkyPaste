@@ -16,7 +16,7 @@ struct PreferencesView: View {
     @AppStorage("showSpecialSymbols") private var showSpecialSymbols: Bool = true
     @AppStorage("enableNotifications") private var enableNotifications: Bool = true
     
-    @State private var launchAtLogin: Bool = false
+    @AppStorage("launchAtLoginEnabled") private var launchAtLogin: Bool = false
     
     @AppStorage("saveText") private var saveText: Bool = true
     @AppStorage("saveImages") private var saveImages: Bool = true
@@ -182,7 +182,6 @@ struct PreferencesView: View {
         }
         .frame(width: 500, height: 450)
         .onAppear {
-            launchAtLogin = SMAppService.mainApp.status == .enabled
             loadFolderShortcuts()
             if enableNotifications {
                 UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
@@ -253,7 +252,7 @@ struct PreferencesView: View {
                 try SMAppService.mainApp.unregister()
             }
         } catch {
-            launchAtLogin = SMAppService.mainApp.status == .enabled
+            launchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLoginEnabled")
         }
     }
     

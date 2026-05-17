@@ -3,6 +3,7 @@ import AppKit
 import os
 import UserNotifications
 import ServiceManagement
+import ApplicationServices
 
 @main
 struct SkyPasteApp: App {
@@ -103,6 +104,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         UserDefaults.standard.register(defaults: [
             "enableNotifications": true,
+            "launchAtLoginEnabled": false,
             "hk1Key": "s",
             "hk1Modifiers": Int(NSEvent.ModifierFlags.command.rawValue),
             "hk2Key": "v",
@@ -121,10 +123,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
         setupNotificationDelegate()
         
-        // Prevent duplicate login items after app update (re-register fresh)
-        if SMAppService.mainApp.status == .enabled {
-            try? SMAppService.mainApp.unregister()
+        if UserDefaults.standard.bool(forKey: "launchAtLoginEnabled") {
             try? SMAppService.mainApp.register()
+        }
+        if !AXIsProcessTrusted() {
+            let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+            _ = AXIsProcessTrustedWithOptions(opts)
         }
         
         if !UserDefaults.standard.bool(forKey: "hasSeenWelcome") {

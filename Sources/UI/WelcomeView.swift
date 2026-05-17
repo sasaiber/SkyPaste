@@ -24,7 +24,7 @@ struct WelcomeView: View {
     @AppStorage("hkFolderKey") private var hkFolderKey: String = "f"
     @AppStorage("hkFolderModifiers") private var hkFolderModifiers: Int = Int(NSEvent.ModifierFlags.command.rawValue)
     
-    @State private var launchAtLogin: Bool = SMAppService.mainApp.status == .enabled
+    @AppStorage("launchAtLoginEnabled") private var launchAtLogin: Bool = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -215,7 +215,7 @@ struct WelcomeView: View {
                             if newValue { try SMAppService.mainApp.register() }
                             else { try SMAppService.mainApp.unregister() }
                         } catch {
-                            launchAtLogin = SMAppService.mainApp.status == .enabled
+                            launchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLoginEnabled")
                         }
                     }
             }

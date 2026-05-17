@@ -214,17 +214,14 @@ class UpdateChecker: ObservableObject {
             let script = """
             #!/bin/bash
             sleep 2
-            
             OLD_APP="\(currentAppURL.path)"
             NEW_APP="\(newAppURL.path)"
-            
             rm -rf "$OLD_APP"
             cp -R "$NEW_APP" "$OLD_APP"
-            
+            codesign --force --deep --sign - "$OLD_APP" 2>/dev/null || true
             if [ $? -eq 0 ]; then
                 open "$OLD_APP"
             fi
-            
             rm -rf "\(tempDir.path)"
             """
             
