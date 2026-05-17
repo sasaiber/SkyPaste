@@ -1,6 +1,8 @@
 import Foundation
 import AppKit
 import UniformTypeIdentifiers
+import os
+import UserNotifications
 
 class ClipboardMonitor: ObservableObject {
     private let pasteboard = NSPasteboard.general
@@ -12,6 +14,29 @@ class ClipboardMonitor: ObservableObject {
     init(storage: Storage) {
         self.storage = storage
         self.lastChangeCount = pasteboard.changeCount
+    }
+    
+    private func sendNotification(title: String, body: String) {
+        guard UserDefaults.standard.bool(forKey: "enableNotifications") else { return }
+        
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            guard settings.authorizationStatus == .authorized else { return }
+            
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            
+            if let soundURL = Bundle.main.url(forResource: "clip", withExtension: "mp3") {
+                content.sound = UNNotificationSound(named: UNNotificationSoundName(soundURL.lastPathComponent))
+            } else {
+                content.sound = .default
+            }
+            
+            let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+            UNUserNotificationCenter.current().add(request) { error in
+                if let error = error { print("Notification error: \(error)") }
+            }
+        }
     }
 
     func start() {
@@ -41,10 +66,6 @@ class ClipboardMonitor: ObservableObject {
 
         let allItems = pasteboard.pasteboardItems ?? []
         let types = Set(pasteboard.types ?? [])
-        
-        print("\n🔍 CLIPBOARD SNAPSHOT:")
-        print("  pasteboardItems count: \(allItems.count)")
-        print("  pasteboardTypes: \(types)")
 
         // 1. Multi-file / single-file: collect ALL file URLs from every pasteboard item
         let fileURLs: [URL] = allItems.compactMap { pbItem in
@@ -55,20 +76,12 @@ class ClipboardMonitor: ObservableObject {
         }
 
         if !fileURLs.isEmpty {
-            print("✅ Found \(fileURLs.count) files")
-            
             // Check if ALL files are images - if so, treat as images not files!
             let imageFiles = fileURLs.filter { isImageFile($0) }
             if imageFiles.count == fileURLs.count && !imageFiles.isEmpty {
-                print("📸 All files are images! Converting to image items...")
-                
                 var imageURLs: [URL] = []
                 for imgURL in imageFiles {
-                    guard let image = NSImage(contentsOf: imgURL) else {
-                        print("  ❌ Failed to load: \(imgURL.lastPathComponent)")
-                        continue
-                    }
-                    print("  ✅ Loaded image: \(imgURL.lastPathComponent)")
+                    guard let image = NSImage(contentsOf: imgURL) else { continue }
                     
                     // Save as PNG
                     if let data = renderImageToPNG(image) {
@@ -79,7 +92,6 @@ class ClipboardMonitor: ObservableObject {
                 }
                 
                 if !imageURLs.isEmpty {
-                    print("💾 Created image item with \(imageURLs.count) images")
                     let item = ClipboardItem(
                         timestamp: Date(),
                         firstCopiedAt: Date(),
@@ -91,14 +103,15 @@ class ClipboardMonitor: ObservableObject {
                         appSource: sourceApp,
                         appBundleID: sourceBundleID
                     )
-                    Task { @MainActor in storage.addItem(item) }
+                    Task { @MainActor in
+                storage.addItem(item)
+                self.sendNotification(title: "Copied", body: item.title ?? "Clipboard Item")
+            }
                     return
                 }
             }
             
             // Not all images, treat as regular files
-            print("📁 Treating as files (not all are images)")
-            // Store all files as a single clipboard item
             let item = ClipboardItem(
                 timestamp: Date(), 
                 firstCopiedAt: Date(), 
@@ -109,33 +122,29 @@ class ClipboardMonitor: ObservableObject {
                 appSource: sourceApp, 
                 appBundleID: sourceBundleID
             )
-            Task { @MainActor in storage.addItem(item) }
+            Task { @MainActor in
+                storage.addItem(item)
+                self.sendNotification(title: "Copied", body: item.title ?? "Clipboard Item")
+            }
             return
         }
 
         // 2. Images — try MANY ways to extract ALL images
         var imageURLs: [URL] = []
         
-        print("📋 Processing images from \(allItems.count) pasteboard items...")
-        
         // Method 1: Direct iteration through pasteboardItems
-        for (idx, pbItem) in allItems.enumerated() {
-            print("  Item \(idx): types = \(pbItem.types)")
-            
+        for pbItem in allItems {
             if let pngData = pbItem.data(forType: .png) {
-                print("    ✅ Found PNG (\(pngData.count) bytes)")
                 if let url = savePNGToDiskAndReturnURL(data: pngData, source: sourceApp, bundleID: sourceBundleID) {
                     imageURLs.append(url)
                 }
             } else if let tiffData = pbItem.data(forType: .tiff) {
-                print("    ✅ Found TIFF (\(tiffData.count) bytes)")
                 if let pngData = extractPNGFromTIFF(tiffData) {
                     if let url = savePNGToDiskAndReturnURL(data: pngData, source: sourceApp, bundleID: sourceBundleID) {
                         imageURLs.append(url)
                     }
                 }
             } else if let jpgData = pbItem.data(forType: NSPasteboard.PasteboardType(rawValue: "public.jpeg")) {
-                print("    ✅ Found JPEG (\(jpgData.count) bytes)")
                 if let url = savePNGToDiskAndReturnURL(data: jpgData, source: sourceApp, bundleID: sourceBundleID) {
                     imageURLs.append(url)
                 }
@@ -147,17 +156,12 @@ class ClipboardMonitor: ObservableObject {
            NSImage.canInit(with: pasteboard),
            let image = NSImage(pasteboard: pasteboard),
            let data = renderImageToPNG(image) {
-            print("🔄 Fallback: NSImage from pasteboard (\(data.count) bytes)")
             if let url = savePNGToDiskAndReturnURL(data: data, source: sourceApp, bundleID: sourceBundleID) {
                 imageURLs.append(url)
             }
         }
         
         if !imageURLs.isEmpty {
-            print("💾 FINAL: Created image item with \(imageURLs.count) images")
-            imageURLs.forEach { print("   - \($0.lastPathComponent)") }
-            
-            // Create item(s) for images
             let item = ClipboardItem(
                 timestamp: Date(),
                 firstCopiedAt: Date(),
@@ -169,7 +173,10 @@ class ClipboardMonitor: ObservableObject {
                 appSource: sourceApp,
                 appBundleID: sourceBundleID
             )
-            Task { @MainActor in storage.addItem(item) }
+            Task { @MainActor in
+                storage.addItem(item)
+                self.sendNotification(title: "Copied", body: item.title ?? "Clipboard Item")
+            }
             return
         }
 
@@ -179,19 +186,28 @@ class ClipboardMonitor: ObservableObject {
            !urlStr.isEmpty {
             let item = ClipboardItem(
                 timestamp: Date(), firstCopiedAt: Date(), type: .link,
-                textContent: urlStr, appSource: sourceApp, appBundleID: sourceBundleID
+                textContent: urlStr, title: urlStr,
+                appSource: sourceApp, appBundleID: sourceBundleID
             )
-            Task { @MainActor in storage.addItem(item) }
+            Task { @MainActor in
+                storage.addItem(item)
+                self.sendNotification(title: "Copied", body: item.title ?? "Clipboard Item")
+            }
             return
         }
 
         // 4. Plain text (last)
         if let text = pasteboard.string(forType: .string), !text.isEmpty {
+            let displayText = text.count > 100 ? String(text.prefix(100)) + "..." : text
             let item = ClipboardItem(
                 timestamp: Date(), firstCopiedAt: Date(), type: .text,
-                textContent: text, appSource: sourceApp, appBundleID: sourceBundleID
+                textContent: text, title: displayText,
+                appSource: sourceApp, appBundleID: sourceBundleID
             )
-            Task { @MainActor in storage.addItem(item) }
+            Task { @MainActor in
+                storage.addItem(item)
+                self.sendNotification(title: "Copied", body: item.title ?? "Clipboard Item")
+            }
         }
     }
 
@@ -269,24 +285,6 @@ class ClipboardMonitor: ObservableObject {
         return currentRep
     }
 
-    private func savePNGToDisk(data: Data, source: String, bundleID: String?) {
-        let base = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("SkyPaste/Images", isDirectory: true)
-        do {
-            try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-            let fileName = UUID().uuidString + ".png"
-            let url = base.appendingPathComponent(fileName)
-            try data.write(to: url, options: .atomic)
-            let item = ClipboardItem(
-                timestamp: Date(), firstCopiedAt: Date(), type: .image,
-                fileURL: url, sizeLabel: "\(data.count / 1024) KB",
-                appSource: source, appBundleID: bundleID
-            )
-            Task { @MainActor in storage.addItem(item) }
-        } catch { /* silently ignore write errors */ }
-    }
-    
     private func savePNGToDiskAndReturnURL(data: Data, source: String, bundleID: String?) -> URL? {
         let base = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -296,14 +294,8 @@ class ClipboardMonitor: ObservableObject {
             let fileName = UUID().uuidString + ".png"
             let url = base.appendingPathComponent(fileName)
             try data.write(to: url, options: .atomic)
-            
-            // Verify file exists
-            let exists = FileManager.default.fileExists(atPath: url.path)
-            print("💾 Saved image (\(data.count) bytes) to: \(url.path) - Exists: \(exists)")
-            
             return url
-        } catch { 
-            print("❌ Failed to save image: \(error)")
+        } catch {
             return nil
         }
     }
@@ -320,22 +312,31 @@ class ClipboardMonitor: ObservableObject {
         stop()
         pasteboard.clearContents()
 
+        if plainTextOnly {
+            if let txt = item.textContent {
+                pasteboard.setString(txt, forType: .string)
+            }
+            lastChangeCount = pasteboard.changeCount
+            sendNotification(title: "Pasted from SkyPaste", body: item.title ?? "Plain Text")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.start()
+            }
+            return
+        }
+
         switch item.type {
         case .text, .link:
             if let txt = item.textContent {
                 pasteboard.setString(txt, forType: .string)
             }
         case .image:
-            // Support multi-image record (URLs stored newline-separated in textContent)
             if let joined = item.textContent {
                 let imageURLs: [URL] = joined
                     .components(separatedBy: "\n")
                     .filter { !$0.isEmpty }
                     .compactMap { urlString -> URL? in
                         if let url = URL(string: urlString) {
-                            if url.scheme == "file" {
-                                return url
-                            }
+                            if url.scheme == "file" { return url }
                         }
                         return URL(fileURLWithPath: urlString)
                     }
@@ -347,16 +348,13 @@ class ClipboardMonitor: ObservableObject {
                 pasteboard.writeObjects([img])
             }
         case .file:
-            // Support multi-file record (URLs stored newline-separated in textContent)
             if let joined = item.textContent {
                 let urls: [URL] = joined
                     .components(separatedBy: "\n")
                     .filter { !$0.isEmpty }
                     .compactMap { urlString -> URL? in
                         if let url = URL(string: urlString) {
-                            if url.scheme == "file" {
-                                return url
-                            }
+                            if url.scheme == "file" { return url }
                         }
                         return URL(fileURLWithPath: urlString)
                     }
@@ -369,21 +367,31 @@ class ClipboardMonitor: ObservableObject {
         }
 
         lastChangeCount = pasteboard.changeCount
+        sendNotification(title: "Pasted from SkyPaste", body: item.title ?? "Clipboard Item")
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             self?.start()
         }
     }
 
     func triggerCmdV() {
-        let vKeyCode: CGKeyCode = 0x09
-        guard let source = CGEventSource(stateID: .hidSystemState) else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            let keyDown = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: true)
-            keyDown?.flags = .maskCommand
-            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: false)
-            keyUp?.flags = .maskCommand
-            keyDown?.post(tap: .cghidEventTap)
-            keyUp?.post(tap: .cghidEventTap)
-        }
+        let vKeyCode: CGKeyCode = 0x09 // kVK_ANSI_V
+        guard let source = CGEventSource(stateID: .combinedSessionState) else { return }
+
+        // Add flag that left/right modifier key has been pressed (like Maccy does)
+        let cmdFlag = CGEventFlags(rawValue: UInt64(CGEventFlags.maskCommand.rawValue) | 0x000008)
+
+        // Disable local keyboard events while pasting
+        source.setLocalEventsFilterDuringSuppressionState(
+            [.permitLocalMouseEvents, .permitSystemDefinedEvents],
+            state: .eventSuppressionStateSuppressionInterval
+        )
+
+        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: true)
+        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: false)
+        keyDown?.flags = cmdFlag
+        keyUp?.flags = cmdFlag
+
+        keyDown?.post(tap: .cgSessionEventTap)
+        keyUp?.post(tap: .cgSessionEventTap)
     }
 }

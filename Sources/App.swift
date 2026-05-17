@@ -1,180 +1,291 @@
 import SwiftUI
 import AppKit
+import os
+import UserNotifications
+import ServiceManagement
 
 @main
 struct SkyPasteApp: App {
-    @StateObject private var storage = Storage()
-    @StateObject private var monitor: ClipboardMonitor
-    
-    // We use a custom window manager for the HUD
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    
-    init() {
-        let store = Storage()
-        _storage = StateObject(wrappedValue: store)
-        _monitor = StateObject(wrappedValue: ClipboardMonitor(storage: store))
-    }
 
     var body: some Scene {
-        // Dummy scene to satisfy SwiftUI
-        Settings {
-            Text("Settings")
-        }
-    }
-}
-
-extension AppDelegate: NSPopoverDelegate {
-    func popoverWillShow(_ notification: Notification) {
-        if outsideClickMonitor == nil {
-            outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-                guard let self = self else { return }
-                self.popover.performClose(nil)
+        Settings { Text("Settings") }
+            .commands {
+                CommandGroup(replacing: .saveItem) { }
+                CommandGroup(replacing: .newItem) { }
+                CommandGroup(replacing: .undoRedo) { }
             }
-        }
-    }
-    
-    func popoverWillClose(_ notification: Notification) {
-        if let monitor = outsideClickMonitor {
-            NSEvent.removeMonitor(monitor)
-            outsideClickMonitor = nil
-        }
-        // Don't clear contentViewController - reuse it for faster reopening
     }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     static private(set) var shared: AppDelegate!
     var globalStore: Storage!
+    var monitorRef: ClipboardMonitor?
+    var previousApp: NSRunningApplication?
     
-    var popover: NSPopover!
     var statusBarItem: NSStatusItem!
+    var settingsWindow: NSWindow?
+    var welcomeWindow: NSWindow?
+    var popupHostingView: NSHostingView<MainView>?
     var outsideClickMonitor: Any?
+    var isPickingEmoji = false
     
-    // Global state passed from SkyPasteApp
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
-        // Set activation policy
         NSApp.setActivationPolicy(.accessory)
-        
         self.globalStore = Storage()
         
-        // Create popover FIRST and set delegate
-        let popover = NSPopover()
-        popover.contentSize = NSSize(width: 400, height: 600)
-        popover.behavior = .transient
-        popover.delegate = self
-        self.popover = popover
-        
-        // THEN create the view controller after delegate is set
-        let mainView = MainView(storage: self.globalStore)
-        popover.contentViewController = NSHostingController(rootView: mainView)
-        
-        // Create Status Bar Item
         self.statusBarItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = self.statusBarItem.button {
             button.image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "SkyPaste")
-            button.action = #selector(togglePopover(_:))
+            button.action = #selector(statusItemClicked(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            button.target = self
         }
-        
-        let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ","))
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit SkyPaste", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
-        self.statusBarItem.menu = menu
         
         if self.statusBarItem.button != nil {
-            self.statusBarItem.menu = nil // We keep the hack for left-click triggering the popover
+            self.statusBarItem.menu = nil
         }
         
-        // Show Welcome Guide if permissions missing
-        if !AXIsProcessTrusted() && !UserDefaults.standard.bool(forKey: "hasDismissedWelcome") {
-            showWelcomeWindow()
-        }
-        
-        // Register Hotkeys
         HotkeyManager.shared.onToggleRequested = { [weak self] in
-            guard let self = self else { return }
-            self.togglePopover(nil)
+            self?.globalStore.selectedFolderID = nil
+            self?.togglePopover(nil)
         }
         HotkeyManager.shared.onPastePlainRequested = { [weak self] in
-            guard let monitor = self?.monitorRef else { return }
+            guard let self = self, let monitor = self.monitorRef else { return }
             let pb = NSPasteboard.general
-            if let string = pb.string(forType: .string) {
-                pb.clearContents()
-                pb.setString(string, forType: .string)
+            guard let string = pb.string(forType: .string) else { return }
+            
+            pb.clearContents()
+            pb.setString(string, forType: .string)
+            
+            if WindowManager.shared.isWindowVisible {
+                WindowManager.shared.close()
+            }
+            
+            if let prevApp = self.previousApp {
+                if #available(macOS 14.0, *) {
+                    prevApp.activate(options: [])
+                } else {
+                    prevApp.activate(options: .activateIgnoringOtherApps)
+                }
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 monitor.triggerCmdV()
             }
         }
         HotkeyManager.shared.onFolderShortcutRequested = { [weak self] folderID in
             guard let self = self else { return }
-            self.monitorRef?.storage.selectedFolderID = folderID
-            self.togglePopover(nil)
+            if self.globalStore.folders.contains(where: { $0.id == folderID }) {
+                self.globalStore.selectedFolderID = folderID
+                if !WindowManager.shared.isWindowVisible {
+                    self.togglePopover(nil)
+                }
+            }
         }
+        
+        HotkeyManager.shared.onFolderMoveRequested = { [weak self] folderID in
+            guard let self = self else { return }
+            if self.globalStore.folders.contains(where: { $0.id == folderID }) {
+                if WindowManager.shared.isWindowVisible, let hid = self.globalStore.hoveredItemID {
+                    self.globalStore.assign(item: hid, to: folderID)
+                }
+            }
+        }
+        
         HotkeyManager.shared.start()
         
-        // Start monitoring clipboard
         let monitor = ClipboardMonitor(storage: self.globalStore)
         monitor.start()
-        // We need to keep a strong reference, usually we'd pass it down or store it
         self.monitorRef = monitor
-    }
-    
-    var monitorRef: ClipboardMonitor?
-    
-    @objc func togglePopover(_ sender: AnyObject?) {
-        if self.popover.isShown {
-            self.popover.performClose(sender)
-        } else {
-            // Ensure content view controller exists (reuse if possible)
-            if self.popover.contentViewController == nil {
-                let mainView = MainView(storage: self.globalStore)
-                self.popover.contentViewController = NSHostingController(rootView: mainView)
+        
+        UserDefaults.standard.register(defaults: [
+            "enableNotifications": true,
+            "hk1Key": "s",
+            "hk1Modifiers": Int(NSEvent.ModifierFlags.command.rawValue),
+            "hk2Key": "v",
+            "hk2Modifiers": Int(NSEvent.ModifierFlags.command.rawValue | NSEvent.ModifierFlags.shift.rawValue | NSEvent.ModifierFlags.option.rawValue),
+            "hkPinKey": "p",
+            "hkPinModifiers": Int(NSEvent.ModifierFlags.command.rawValue),
+            "hkDeleteKey": "delete",
+            "hkDeleteModifiers": Int(NSEvent.ModifierFlags.command.rawValue),
+            "hkFolderKey": "f",
+            "hkFolderModifiers": Int(NSEvent.ModifierFlags.command.rawValue),
+        ])
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            if settings.authorizationStatus == .notDetermined {
+                self.requestNotificationPermission()
             }
-            
-            let position = UserDefaults.standard.string(forKey: "popupPosition") ?? "cursor"
-            switch position {
-            case "statusItem":
-                if let button = self.statusBarItem.button {
-                    // Get button frame in screen coordinates
-                    let buttonFrame = button.window?.convertToScreen(button.frame) ?? button.frame
-                    let dummyWindow = NSWindow(contentRect: buttonFrame,
-                                               styleMask: .borderless,
-                                               backing: .buffered,
-                                               defer: false)
-                    dummyWindow.backgroundColor = .clear
-                    dummyWindow.isOpaque = false
-                    dummyWindow.hasShadow = false
-                    dummyWindow.level = .floating
-                    dummyWindow.makeKeyAndOrderFront(nil)
-                    
-                    if let view = dummyWindow.contentView {
-                        self.popover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
-                    }
-                    
-                    // Close dummy window when popover closes
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-                        if let self = self, !self.popover.isShown {
-                            dummyWindow.close()
-                        }
-                    }
-                } else {
-                    WindowManager.shared.showPopoverAtCursor(popover: popover)
-                }
-            case "center":
-                WindowManager.shared.showPopoverAtCenter(popover: popover)
-            default: // "cursor"
-                WindowManager.shared.showPopoverAtCursor(popover: popover)
+        }
+        setupNotificationDelegate()
+        
+        // Prevent duplicate login items after app update (re-register fresh)
+        if SMAppService.mainApp.status == .enabled {
+            try? SMAppService.mainApp.unregister()
+            try? SMAppService.mainApp.register()
+        }
+        
+        if !UserDefaults.standard.bool(forKey: "hasSeenWelcome") {
+            showWelcomeWindow()
+        }
+        
+        Task {
+            if UpdateChecker.shared.shouldAutoCheck() {
+                await UpdateChecker.shared.checkForUpdates()
             }
-            NSApp.activate(ignoringOtherApps: true)
-            self.popover.contentViewController?.view.window?.makeKey()
         }
     }
     
-    var settingsWindow: NSWindow?
+    private func setupNotificationDelegate() {
+        UNUserNotificationCenter.current().delegate = self
+    }
     
-    @MainActor
-    @objc func openSettings() {
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound])
+    }
+    
+    private func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if let error = error {
+                print("SkyPaste: Notification permission request failed: \(error.localizedDescription)")
+            }
+            if granted {
+                print("SkyPaste: Notification permission granted")
+            }
+        }
+    }
+    
+    @MainActor @objc func statusItemClicked(_ sender: AnyObject?) {
+        guard let event = NSApp.currentEvent else {
+            self.globalStore.selectedFolderID = nil
+            togglePopover(sender)
+            return
+        }
+        
+        if event.type == .rightMouseUp {
+            showStatusItemMenu()
+        } else {
+            self.globalStore.selectedFolderID = nil
+            togglePopover(sender)
+        }
+    }
+    
+    @MainActor private func showStatusItemMenu() {
+        let menu = NSMenu()
+        
+        let recentItems = globalStore.items.prefix(5)
+        if !recentItems.isEmpty {
+            for item in recentItems {
+                let title: String
+                switch item.type {
+                case .text, .link:
+                    title = (item.textContent ?? "").components(separatedBy: .newlines).first ?? "Empty"
+                case .image:
+                    title = item.title ?? "Image"
+                case .file:
+                    title = item.title ?? item.fileURL?.lastPathComponent ?? "File"
+                case .other:
+                    title = "Unknown"
+                }
+                let menuItem = NSMenuItem(title: String(title.prefix(50)), action: #selector(statusItemPaste(_:)), keyEquivalent: "")
+                menuItem.representedObject = item
+                menu.addItem(menuItem)
+            }
+            menu.addItem(NSMenuItem.separator())
+        }
+        
+        menu.addItem(NSMenuItem(title: "Open SkyPaste", action: #selector(togglePopover(_:)), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ","))
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Quit SkyPaste", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        
+        if let button = self.statusBarItem.button {
+            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.frame.maxY), in: button)
+        }
+    }
+    
+    @MainActor @objc func statusItemPaste(_ sender: NSMenuItem) {
+        guard let item = sender.representedObject as? ClipboardItem else { return }
+        previousApp = NSWorkspace.shared.frontmostApplication
+        pasteFromClipboard(item: item, plainTextOnly: false, shouldPaste: true)
+    }
+    
+    @objc func togglePopover(_ sender: AnyObject?) {
+        guard UserDefaults.standard.bool(forKey: "hasSeenWelcome") else {
+            DispatchQueue.main.async { self.showWelcomeWindow() }
+            return
+        }
+        if WindowManager.shared.isWindowVisible {
+            WindowManager.shared.close()
+        } else {
+            self.previousApp = NSWorkspace.shared.frontmostApplication
+            
+            if popupHostingView == nil {
+                let mainView = MainView(storage: self.globalStore)
+                let hostingView = NSHostingView(rootView: mainView)
+                hostingView.frame = NSRect(x: 0, y: 0, width: 400, height: 600)
+                self.popupHostingView = hostingView
+            }
+            
+            let size = NSSize(width: 400, height: 600)
+            let position = UserDefaults.standard.string(forKey: "popupPosition") ?? "cursor"
+            
+            let button = position == "statusItem" ? self.statusBarItem.button : nil
+            WindowManager.shared.show(contentView: self.popupHostingView!, size: size, at: position, button: button)
+            
+            setupOutsideClickMonitor()
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    }
+    
+    private func setupOutsideClickMonitor() {
+        removeOutsideClickMonitor()
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            guard let self = self else { return }
+            if self.isPickingEmoji {
+                self.isPickingEmoji = false // Ignore this click (which closes character palette), but reset the flag
+                return
+            }
+            WindowManager.shared.close()
+            self.removeOutsideClickMonitor()
+        }
+    }
+    
+    private func removeOutsideClickMonitor() {
+        if let monitor = outsideClickMonitor {
+            NSEvent.removeMonitor(monitor)
+            outsideClickMonitor = nil
+        }
+    }
+    
+    /// Maccy-style paste: copy → close → activate target → wait → Cmd+V
+    func pasteFromClipboard(item: ClipboardItem? = nil, plainTextOnly: Bool? = nil, shouldPaste: Bool = true) {
+        if let item = item, let monitor = monitorRef {
+            monitor.copyToPasteboard(item: item, plainTextOnly: plainTextOnly ?? false)
+        }
+        
+        WindowManager.shared.close()
+        removeOutsideClickMonitor()
+        
+        // Hide SkyPaste so macOS natively restores focus to the previously active application
+        NSApp.hide(nil)
+        
+        guard shouldPaste else { return }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            // Trigger paste after allowing macOS time to switch focus
+            self?.monitorRef?.triggerCmdV()
+        }
+    }
+    
+    @MainActor @objc func openSettings() {
+        if WindowManager.shared.isWindowVisible {
+            WindowManager.shared.close()
+            removeOutsideClickMonitor()
+        }
+        
         if let window = settingsWindow {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -182,27 +293,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         let preferencesView = PreferencesView(storage: self.globalStore)
-        
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 450, height: 400),
-            styleMask: [.titled, .closable, .miniaturizable],
-            backing: .buffered,
-            defer: false
-        )
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 450, height: 400),
+                              styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
         window.center()
         window.title = "SkyPaste Settings"
         window.contentViewController = NSHostingController(rootView: preferencesView)
         window.isReleasedWhenClosed = false
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        
         self.settingsWindow = window
     }
     
-    var welcomeWindow: NSWindow?
-    
-    @MainActor
-    func showWelcomeWindow() {
+    @MainActor func showWelcomeWindow() {
         if let window = welcomeWindow {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -211,18 +313,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         let welcomeView = WelcomeView(onContinue: { [weak self] in
             DispatchQueue.main.async {
+                UserDefaults.standard.set(true, forKey: "hasSeenWelcome")
                 self?.welcomeWindow?.orderOut(nil)
                 self?.welcomeWindow = nil
                 self?.togglePopover(nil)
             }
         })
         
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 450, height: 450),
-            styleMask: [.titled, .closable, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 450, height: 450),
+                              styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
         window.center()
         window.titlebarAppearsTransparent = true
         window.title = ""
@@ -230,36 +329,51 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.isReleasedWhenClosed = false
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        
         self.welcomeWindow = window
     }
     
-    // MARK: - Application Termination
-    
     func applicationWillTerminate(_ notification: Notification) {
-        // Stop clipboard monitoring
+        // If app was moved to Trash, auto-run full uninstall cleanup
+        let bundlePath = Bundle.main.bundlePath
+        if bundlePath.contains("/.Trash/") || bundlePath.contains("/Trash/") {
+            let bundleID = "com.skytech.macvision"
+            try? SMAppService.mainApp.unregister()
+            let script = """
+            echo "Auto-cleanup on trash move in 5 seconds..."
+            sleep 5
+            /usr/bin/tccutil reset All \(bundleID) 2>/dev/null || true
+            /usr/bin/tccutil reset Accessibility \(bundleID) 2>/dev/null || true
+            /usr/bin/tccutil reset Notifications \(bundleID) 2>/dev/null || true
+            sqlite3 ~/Library/Application\\ Support/com.apple.TCC/TCC.db "DELETE FROM access WHERE client LIKE '%sky%' OR client LIKE '%skypaste%' OR client LIKE '%\(bundleID)%';" 2>/dev/null || true
+            sqlite3 /Library/Application\\ Support/com.apple.TCC/TCC.db "DELETE FROM access WHERE client LIKE '%sky%' OR client LIKE '%skypaste%' OR client LIKE '%\(bundleID)%';" 2>/dev/null || true
+            rm -f /Library/Application\\ Support/com.apple.TCC/AdhocSignatureCache/* 2>/dev/null || true
+            rm -f ~/Library/Application\\ Support/com.apple.TCC/AdhocSignatureCache/* 2>/dev/null || true
+            
+            # Force TCC daemon reload
+            killall -HUP cfprefsd 2>/dev/null || true
+            rm -rf ~/Library/Application\\ Support/SkyPaste ~/Library/Application\\ Support/com.sky* ~/Library/Caches/SkyPaste ~/Library/Caches/com.sky* ~/Library/Logs/SkyPaste ~/Library/Logs/com.sky* ~/.SkyPaste ~/Library/Preferences/com.sky* ~/Library/Preferences/com.sky.skypaste* ~/Library/Preferences/\(bundleID)* ~/Library/Containers/com.sky* ~/Library/Containers/\(bundleID)* 2>/dev/null || true
+            /usr/bin/defaults delete \(bundleID) 2>/dev/null || true
+            /usr/bin/defaults delete \(bundleID) hasSeenWelcome 2>/dev/null || true
+            /usr/bin/defaults delete \(bundleID) hasRequestedNotifications 2>/dev/null || true
+            /bin/launchctl remove \(bundleID) 2>/dev/null || true
+            rm -f ~/Library/LaunchAgents/\(bundleID)*.plist 2>/dev/null || true
+            """
+            let p = Process()
+            p.launchPath = "/bin/bash"
+            p.arguments = ["-c", script]
+            try? p.run()
+            p.waitUntilExit()
+        }
+        
         monitorRef?.stop()
-        
-        // Stop hotkey manager
         HotkeyManager.shared.stop()
-        
-        // Clear image cache
         ImageCache.shared.clear()
-        
-        // Clean up windows
-        popover = nil
+        WindowManager.shared.close()
         settingsWindow = nil
         welcomeWindow = nil
-        
-        // Remove global monitor
-        if let monitor = outsideClickMonitor {
-            NSEvent.removeMonitor(monitor)
-            outsideClickMonitor = nil
-        }
     }
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        return false // macOS menu-bar app, don't terminate when window closes
+        return false
     }
 }
-

@@ -1,5 +1,7 @@
 import SwiftUI
 import ServiceManagement
+import ApplicationServices
+import UserNotifications
 
 struct PreferencesView: View {
     @ObservedObject var storage: Storage
@@ -12,6 +14,7 @@ struct PreferencesView: View {
     @AppStorage("pastePlainActive") private var pastePlainActive: Bool = false
     @AppStorage("previewDelay") private var previewDelay: Double = 200
     @AppStorage("showSpecialSymbols") private var showSpecialSymbols: Bool = true
+    @AppStorage("enableNotifications") private var enableNotifications: Bool = true
     
     @State private var launchAtLogin: Bool = false
     
@@ -21,9 +24,10 @@ struct PreferencesView: View {
     @AppStorage("saveFiles") private var saveFiles: Bool = true
     
     @State private var folderShortcuts: [UUID: (key: String, mod: Int)] = [:]
+    @State private var folderMoveShortcuts: [UUID: (key: String, mod: Int)] = [:]
 
-    @AppStorage("hk1Key") private var hk1Key: String = "v"
-    @AppStorage("hk1Modifiers") private var hk1Modifiers: Int = Int(NSEvent.ModifierFlags.command.rawValue | NSEvent.ModifierFlags.shift.rawValue)
+    @AppStorage("hk1Key") private var hk1Key: String = "s"
+    @AppStorage("hk1Modifiers") private var hk1Modifiers: Int = Int(NSEvent.ModifierFlags.command.rawValue)
     
     @AppStorage("hk2Key") private var hk2Key: String = "v"
     @AppStorage("hk2Modifiers") private var hk2Modifiers: Int = Int(NSEvent.ModifierFlags.command.rawValue | NSEvent.ModifierFlags.shift.rawValue | NSEvent.ModifierFlags.option.rawValue)
@@ -31,10 +35,10 @@ struct PreferencesView: View {
     @AppStorage("hkPinKey") private var hkPinKey: String = "p"
     @AppStorage("hkPinModifiers") private var hkPinModifiers: Int = Int(NSEvent.ModifierFlags.command.rawValue)
     
-    @AppStorage("hkDeleteKey") private var hkDeleteKey: String = "d"
+    @AppStorage("hkDeleteKey") private var hkDeleteKey: String = "delete"
     @AppStorage("hkDeleteModifiers") private var hkDeleteModifiers: Int = Int(NSEvent.ModifierFlags.command.rawValue)
     
-    @AppStorage("hkFolderKey") private var hkFolderKey: String = "c"
+    @AppStorage("hkFolderKey") private var hkFolderKey: String = "f"
     @AppStorage("hkFolderModifiers") private var hkFolderModifiers: Int = Int(NSEvent.ModifierFlags.command.rawValue)
     @State private var selectedTab = 0
     
@@ -66,6 +70,27 @@ struct PreferencesView: View {
                         Section("Behavior") {
                             Toggle("Automatically paste selected item", isOn: $autoPasteActive)
                             Toggle("Paste without formatting by default", isOn: $pastePlainActive)
+                            Toggle("Show notifications for copy/paste", isOn: $enableNotifications)
+                                .onChange(of: enableNotifications) { _, newValue in
+                                    if newValue {
+                                        UNUserNotificationCenter.current().getNotificationSettings { settings in
+                                            DispatchQueue.main.async {
+                                                switch settings.authorizationStatus {
+                                                case .notDetermined:
+                                                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+                                                case .denied, .provisional:
+                                                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
+                                                        NSWorkspace.shared.open(url)
+                                                    }
+                                                case .authorized:
+                                                    break
+                                                @unknown default:
+                                                    break
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                         }
                         
                         Section("Appearance") {
@@ -75,15 +100,17 @@ struct PreferencesView: View {
                                 Text("Screen Center").tag("center")
                             }
                             
-                            LabeledContent("Preview Delay:") {
-                                HStack(spacing: 8) {
-                                    Slider(value: $previewDelay, in: 0...2000, step: 50)
-                                    Text("\(Int(previewDelay)) ms")
-                                        .frame(width: 60, alignment: .leading)
-                                        .monospacedDigit()
-                                        .foregroundColor(.secondary)
-                                }
-                            }
+                             LabeledContent("Preview Delay:") {
+                                 HStack(spacing: 12) {
+                                     Slider(value: $previewDelay, in: 0...2000, step: 50)
+                                         .tint(.accentColor)
+                                         .frame(minWidth: 180)
+                                     Text("\(Int(previewDelay)) ms")
+                                         .frame(width: 65, alignment: .trailing)
+                                         .monospacedDigit()
+                                         .foregroundColor(.secondary)
+                                 }
+                             }
                             
                             Toggle("Show special symbols (⏎ ⇥ etc.)", isOn: $showSpecialSymbols)
                         }
@@ -130,47 +157,13 @@ struct PreferencesView: View {
                         }
                         
                     case 2:
-                        Section("Storage") {
-                            LabeledContent("Maximum Size:") {
-                                HStack(spacing: 8) {
-                                    Slider(value: $limitMB, in: 10...9999, step: 10)
-                                    TextField("", value: $limitMB, format: .number)
-                                        .textFieldStyle(.roundedBorder)
-                                        .frame(width: 55)
-                                    Text("MB")
-                                        .foregroundColor(.secondary)
-                                        .fixedSize()
-                                }
-                            }
-                            
-                            Toggle("Never delete automatically", isOn: $neverDelete)
-                            
-                            if !neverDelete {
-                                LabeledContent("Retain items for:") {
-                                    HStack(spacing: 8) {
-                                        Slider(value: Binding(get: { Double(retainDays) }, set: { retainDays = Int($0) }), in: 1...365, step: 1)
-                                        TextField("", value: $retainDays, format: .number)
-                                            .textFieldStyle(.roundedBorder)
-                                            .frame(width: 55)
-                                        Text("Days")
-                                            .foregroundColor(.secondary)
-                                            .fixedSize()
-                                    }
-                                }
-                            }
-                            
-                            Button(role: .destructive, action: {
-                                storage.clearUnpinned()
-                            }) {
-                                Text("Clear All Unpinned History")
-                                    .frame(maxWidth: .infinity, alignment: .center)
-                            }
-                        }
+                        StorageTabView(storage: storage)
                         
                     case 3:
                         FoldersTabView(
                             storage: storage,
                             folderShortcuts: $folderShortcuts,
+                            folderMoveShortcuts: $folderMoveShortcuts,
                             editingFolder: $editingFolder,
                             folderToDelete: $folderToDelete,
                             showDeleteConfirmation: $showDeleteConfirmation,
@@ -191,6 +184,49 @@ struct PreferencesView: View {
         .onAppear {
             launchAtLogin = SMAppService.mainApp.status == .enabled
             loadFolderShortcuts()
+            if enableNotifications {
+                UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+            }
+        }
+        .onChange(of: hk1Key) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            HotkeyManager.shared.start()
+        }
+        .onChange(of: hk1Modifiers) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            HotkeyManager.shared.start()
+        }
+        .onChange(of: hk2Key) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            HotkeyManager.shared.start()
+        }
+        .onChange(of: hk2Modifiers) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            HotkeyManager.shared.start()
+        }
+        .onChange(of: hkPinKey) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            HotkeyManager.shared.start()
+        }
+        .onChange(of: hkPinModifiers) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            HotkeyManager.shared.start()
+        }
+        .onChange(of: hkDeleteKey) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            HotkeyManager.shared.start()
+        }
+        .onChange(of: hkDeleteModifiers) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            HotkeyManager.shared.start()
+        }
+        .onChange(of: hkFolderKey) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            HotkeyManager.shared.start()
+        }
+        .onChange(of: hkFolderModifiers) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            HotkeyManager.shared.start()
         }
         .alert("Delete Folder", isPresented: $showDeleteConfirmation, presenting: folderToDelete) { folder in
             Button("Delete Folder & Items", role: .destructive) {
@@ -202,7 +238,7 @@ struct PreferencesView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: { folder in
-            Text("Folder \"\(folder.name)\" contains \(storage.items.filter { $0.folderID == folder.id }.count) items. What would you like to do?")
+            Text("Folder \"\(folder.name)\" contains \(storage.itemCount(forFolderID: folder.id)) items. What would you like to do?")
         }
         .sheet(item: $editingFolder) { folder in
             FolderEditView(folder: folder, storage: storage)
@@ -217,15 +253,10 @@ struct PreferencesView: View {
                 try SMAppService.mainApp.unregister()
             }
         } catch {
-            // Silently handle — user can re-toggle
             launchAtLogin = SMAppService.mainApp.status == .enabled
         }
     }
     
-    // MARK: - Folder State
-    @State private var newFolderName = ""
-    @State private var newFolderEmoji = "📁"
-    @State private var newFolderColor = Color.accentColor
     @State private var editingFolder: AppFolder? = nil
     @State private var folderToDelete: AppFolder? = nil
     @State private var showDeleteConfirmation = false
@@ -239,6 +270,14 @@ struct PreferencesView: View {
             }
             folderShortcuts = temp
         }
+        if let data = UserDefaults.standard.data(forKey: "folderMoveShortcuts"),
+           let decoded = try? JSONDecoder().decode([HotkeyManager.FolderShortcut].self, from: data) {
+            var temp: [UUID: (key: String, mod: Int)] = [:]
+            for sc in decoded {
+                temp[sc.folderID] = (sc.keyText, sc.modifiers)
+            }
+            folderMoveShortcuts = temp
+        }
     }
     
     private func saveFolderShortcuts() {
@@ -246,12 +285,17 @@ struct PreferencesView: View {
         if let data = try? JSONEncoder().encode(array) {
             UserDefaults.standard.set(data, forKey: "folderShortcuts")
         }
-        // Force hotkey manager to reload bounds
+        let moveArray = folderMoveShortcuts.map { HotkeyManager.FolderShortcut(folderID: $0.key, keyText: $0.value.key, modifiers: $0.value.mod) }
+        if let data = try? JSONEncoder().encode(moveArray) {
+            UserDefaults.standard.set(data, forKey: "folderMoveShortcuts")
+        }
         HotkeyManager.shared.start()
     }
     
     private func checkForDuplicate(key: String, modifiers: Int, actionName: String) -> String? {
-        var allShortcuts: [(name: String, key: String, mod: Int)] = [
+        let targetKey = key.lowercased()
+        
+        let globalShortcuts: [(name: String, key: String, mod: Int)] = [
             ("Show SkyPaste", hk1Key, hk1Modifiers),
             ("Paste Plain Text", hk2Key, hk2Modifiers),
             ("Quick Pin", hkPinKey, hkPinModifiers),
@@ -259,94 +303,34 @@ struct PreferencesView: View {
             ("Create Folder", hkFolderKey, hkFolderModifiers)
         ]
         
-        for (id, sc) in folderShortcuts {
-            if let folder = storage.folders.first(where: { $0.id == id }) {
-                allShortcuts.append(("Folder '\(folder.name)'", sc.key, sc.mod))
-            }
-        }
-        
-        for sc in allShortcuts {
-            if sc.name != actionName && sc.key.lowercased() == key.lowercased() && sc.mod == modifiers {
+        for sc in globalShortcuts {
+            if sc.name != actionName && sc.key.lowercased() == targetKey && sc.mod == modifiers {
                 return "In use by \(sc.name)"
             }
         }
-        return nil
-    }
-}
-
-struct ShortcutRecorder: View {
-    var actionName: String = ""
-    @Binding var keyString: String
-    @Binding var modifiers: Int
-    var onValidate: ((String, Int, String) -> String?)? = nil
-    
-    @State private var isRecording = false
-    @State private var monitor: Any?
-    @State private var errorMessage: String? = nil
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Button(action: {
-                isRecording.toggle()
-                if isRecording { 
-                    self.errorMessage = nil
-                    startRecording() 
-                } else { stopRecording() }
-            }) {
-                Text(isRecording ? "Listening..." : formatShortcut())
-                    .frame(width: 100)
-                    .padding(.vertical, 4)
-            }
-            .buttonStyle(.bordered)
-            .tint(isRecording ? .accentColor : (errorMessage != nil ? .red : .secondary))
-            .onDisappear { stopRecording() }
-            
-            if let err = errorMessage {
-                Text(err)
-                    .font(.caption2)
-                    .foregroundColor(.red)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-    
-    private func formatShortcut() -> String {
-        guard !keyString.isEmpty else { return "None" }
-        var result = ""
-        let flags = NSEvent.ModifierFlags(rawValue: UInt(modifiers))
-        if flags.contains(.control) { result += "⌃" }
-        if flags.contains(.option) { result += "⌥" }
-        if flags.contains(.shift) { result += "⇧" }
-        if flags.contains(.command) { result += "⌘" }
-        result += keyString.uppercased()
-        return result
-    }
-    
-    private func startRecording() {
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            if let char = event.charactersIgnoringModifiers, !char.isEmpty {
-                if let err = onValidate?(char, Int(flags.rawValue), actionName) {
-                    self.errorMessage = err
-                    self.isRecording = false
-                    self.stopRecording()
-                    return nil
+        
+        for (id, sc) in folderShortcuts {
+            if sc.key.lowercased() == targetKey && sc.mod == modifiers {
+                if let folder = storage.folders.first(where: { $0.id == id }) {
+                    let folderName = "Open '\(folder.name)'"
+                    if folderName != actionName {
+                        return "In use by \(folderName)"
+                    }
                 }
-                
-                self.keyString = char
-                self.modifiers = Int(flags.rawValue)
-                self.isRecording = false
-                self.stopRecording()
-                return nil // Consume event
             }
-            return event
         }
-    }
-    
-    private func stopRecording() {
-        if let monitor = monitor {
-            NSEvent.removeMonitor(monitor)
-            self.monitor = nil
+        
+        for (id, sc) in folderMoveShortcuts {
+            if sc.key.lowercased() == targetKey && sc.mod == modifiers {
+                if let folder = storage.folders.first(where: { $0.id == id }) {
+                    let folderName = "Move to '\(folder.name)'"
+                    if folderName != actionName {
+                        return "In use by \(folderName)"
+                    }
+                }
+            }
         }
+        
+        return nil
     }
 }

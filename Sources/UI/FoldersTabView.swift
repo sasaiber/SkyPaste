@@ -3,6 +3,7 @@ import SwiftUI
 struct FoldersTabView: View {
     @ObservedObject var storage: Storage
     @Binding var folderShortcuts: [UUID: (key: String, mod: Int)]
+    @Binding var folderMoveShortcuts: [UUID: (key: String, mod: Int)]
     @Binding var editingFolder: AppFolder?
     @Binding var folderToDelete: AppFolder?
     @Binding var showDeleteConfirmation: Bool
@@ -21,20 +22,25 @@ struct FoldersTabView: View {
     
     @ViewBuilder
     private var createSection: some View {
-        Section("Create Folder") {
-            HStack(alignment: .center, spacing: 8) {
-                emojiPicker
+        VStack(spacing: 16) {
+            Text("Create Folder")
+                .font(.headline)
+            
+            HStack(spacing: 12) {
+                EmojiPickerButton(emoji: $newFolderEmoji)
+                    .frame(width: 36, height: 36)
                 
-                ColorPicker("", selection: $newFolderColor)
-                    .labelsHidden()
-                    .frame(width: 30, height: 30)
+                ColorPicker("", selection: $newFolderColor).labelsHidden().frame(width: 30)
                 
                 TextField("Folder name...", text: $newFolderName)
                     .textFieldStyle(.roundedBorder)
-                
-                Button("Add") {
+            }
+            
+            HStack {
+                Spacer()
+                Button("Create") {
                     storage.createFolder(
-                        name: newFolderName,
+                        name: newFolderName.isEmpty ? "New Folder" : newFolderName,
                         emoji: newFolderEmoji.isEmpty ? "📁" : newFolderEmoji,
                         colorHex: newFolderColor.toHex()
                     )
@@ -42,27 +48,14 @@ struct FoldersTabView: View {
                     newFolderEmoji = "📁"
                     newFolderColor = .accentColor
                 }
+                .buttonStyle(.borderedProminent)
                 .disabled(newFolderName.isEmpty)
             }
         }
-    }
-    
-    @ViewBuilder
-    private var emojiPicker: some View {
-        Button(action: { showEmojiPicker = true }) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.secondary.opacity(0.12))
-                    .frame(width: 36, height: 36)
-                Text(newFolderEmoji.isEmpty ? "📁" : newFolderEmoji)
-                    .font(.title3)
-            }
-            .frame(width: 36, height: 36)
-        }
-        .buttonStyle(.plain)
-        .popover(isPresented: $showEmojiPicker) {
-            EmojiPickerView(selectedEmoji: $newFolderEmoji)
-        }
+        .padding()
+        .background(Color.secondary.opacity(0.05))
+        .cornerRadius(12)
+        .padding(.bottom, 10)
     }
     
     @ViewBuilder
@@ -93,46 +86,86 @@ struct FoldersTabView: View {
                 Text(folder.name)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(folder.displayColor)
-                Text("\(storage.items.filter { $0.folderID == folder.id }.count) items")
+                Text("\(storage.itemCount(forFolderID: folder.id)) items")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
             
             Spacer()
             
-            ShortcutRecorder(
-                actionName: "Folder '\(folder.name)'",
-                keyString: Binding(
-                    get: { folderShortcuts[folder.id]?.key ?? "" },
-                    set: { val in
-                        var curr = folderShortcuts[folder.id] ?? ("", 0)
-                        curr.key = val
-                        folderShortcuts[folder.id] = curr
-                        onSaveShortcuts()
-                    }
-                ),
-                modifiers: Binding(
-                    get: { folderShortcuts[folder.id]?.mod ?? 0 },
-                    set: { val in
-                        var curr = folderShortcuts[folder.id] ?? ("", 0)
-                        curr.mod = val
-                        folderShortcuts[folder.id] = curr
-                        onSaveShortcuts()
-                    }
-                ),
-                onValidate: onValidate
-            )
-            .frame(width: 80)
-            .scaleEffect(0.9)
+            VStack(alignment: .trailing, spacing: 8) {
+                HStack(alignment: .center, spacing: 8) {
+                        Text("Open:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(width: 40, alignment: .leading)
+                    ShortcutRecorder(
+                        actionName: "Open '\(folder.name)'",
+                        keyString: Binding(
+                            get: { folderShortcuts[folder.id]?.key ?? "" },
+                            set: { val in
+                                var curr = folderShortcuts[folder.id] ?? ("", 0)
+                                curr.key = val
+                                folderShortcuts[folder.id] = curr
+                                onSaveShortcuts()
+                            }
+                        ),
+                        modifiers: Binding(
+                            get: { folderShortcuts[folder.id]?.mod ?? 0 },
+                            set: { val in
+                                var curr = folderShortcuts[folder.id] ?? ("", 0)
+                                curr.mod = val
+                                folderShortcuts[folder.id] = curr
+                                onSaveShortcuts()
+                            }
+                        ),
+                        onValidate: onValidate
+                    )
+                    .frame(width: 100)
+                }
+                
+                HStack(alignment: .center, spacing: 8) {
+                        Text("Move:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(width: 40, alignment: .leading)
+                    ShortcutRecorder(
+                        actionName: "Move to '\(folder.name)'",
+                        keyString: Binding(
+                            get: { folderMoveShortcuts[folder.id]?.key ?? "" },
+                            set: { val in
+                                var curr = folderMoveShortcuts[folder.id] ?? ("", 0)
+                                curr.key = val
+                                folderMoveShortcuts[folder.id] = curr
+                                onSaveShortcuts()
+                            }
+                        ),
+                        modifiers: Binding(
+                            get: { folderMoveShortcuts[folder.id]?.mod ?? 0 },
+                            set: { val in
+                                var curr = folderMoveShortcuts[folder.id] ?? ("", 0)
+                                curr.mod = val
+                                folderMoveShortcuts[folder.id] = curr
+                                onSaveShortcuts()
+                            }
+                        ),
+                        onValidate: onValidate
+                    )
+                    .frame(width: 100)
+                }
+            }
             
             Button(action: {
                 folderToDelete = folder
                 showDeleteConfirmation = true
             }) {
                 Image(systemName: "trash")
-                    .foregroundColor(.red)
+                    .foregroundColor(.secondary)
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .padding(.leading, 12)
         }
     }
 }

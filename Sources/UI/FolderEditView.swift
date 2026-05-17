@@ -8,7 +8,6 @@ struct FolderEditView: View {
     @State private var editedName: String
     @State private var editedEmoji: String
     @State private var editedColor: Color
-    @State private var showEmojiPicker = false
     
     init(folder: AppFolder, storage: Storage) {
         self.folder = folder
@@ -29,21 +28,8 @@ struct FolderEditView: View {
                 .padding(.top, 16)
             
             HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(editedColor.opacity(0.18))
-                        .frame(width: 52, height: 52)
-                    Text(editedEmoji.isEmpty ? "📁" : editedEmoji)
-                        .font(.largeTitle)
-                        .frame(width: 52, height: 52)
-                }
-                .frame(width: 52, height: 52)
-                .onTapGesture {
-                    showEmojiPicker = true
-                }
-                .popover(isPresented: $showEmojiPicker) {
-                    EmojiPickerView(selectedEmoji: $editedEmoji)
-                }
+                EmojiPickerButton(emoji: $editedEmoji)
+                    .frame(width: 52, height: 52)
                 
                 VStack(alignment: .leading, spacing: 8) {
                     TextField("Folder name", text: $editedName)
