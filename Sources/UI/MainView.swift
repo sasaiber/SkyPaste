@@ -436,7 +436,6 @@ struct FolderSettingsOverlay: View {
                         var targetID: UUID
                         if let existing = folderToEdit {
                             var updated = existing
-                            updated.name = name.isEmpty ? existing.name : name
                             updated.emoji = finalEmoji
                             updated.colorHex = color.toHex()
                             storage.updateFolder(updated)

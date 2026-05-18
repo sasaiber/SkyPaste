@@ -1,6 +1,6 @@
 import SwiftUI
-import ApplicationServices
 import ServiceManagement
+import ApplicationServices
 import UserNotifications
 
 enum OnboardingStep {
@@ -23,7 +23,6 @@ struct WelcomeView: View {
     
     @AppStorage("hkFolderKey") private var hkFolderKey: String = "f"
     @AppStorage("hkFolderModifiers") private var hkFolderModifiers: Int = Int(NSEvent.ModifierFlags.command.rawValue)
-    
     @AppStorage("launchAtLoginEnabled") private var launchAtLogin: Bool = false
     
     var body: some View {
@@ -39,6 +38,9 @@ struct WelcomeView: View {
         .frame(width: 500, height: 550)
         .background(VisualEffectView(material: .hudWindow, blendingMode: .behindWindow).ignoresSafeArea())
         .onAppear {
+            if #available(macOS 13.0, *) {
+                launchAtLogin = SMAppService.mainApp.status == .enabled
+            }
             checkNotificationStatus()
             checkAccessibilityStatus()
             startAccessibilityPolling()
@@ -211,11 +213,12 @@ struct WelcomeView: View {
                 Toggle("Launch at Login", isOn: $launchAtLogin)
                     .toggleStyle(SwitchToggleStyle(tint: .blue))
                     .onChange(of: launchAtLogin) { _, newValue in
-                        do {
-                            if newValue { try SMAppService.mainApp.register() }
-                            else { try SMAppService.mainApp.unregister() }
-                        } catch {
-                            launchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLoginEnabled")
+                        UserDefaults.standard.set(newValue, forKey: "launchAtLoginEnabled")
+                        if #available(macOS 13.0, *) {
+                            if newValue { try? SMAppService.mainApp.register() }
+                            else { try? SMAppService.mainApp.unregister() }
+                        } else {
+                            SMLoginItemSetEnabled("com.sky.skypaste" as CFString, newValue)
                         }
                     }
             }

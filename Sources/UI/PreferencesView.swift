@@ -15,7 +15,6 @@ struct PreferencesView: View {
     @AppStorage("previewDelay") private var previewDelay: Double = 200
     @AppStorage("showSpecialSymbols") private var showSpecialSymbols: Bool = true
     @AppStorage("enableNotifications") private var enableNotifications: Bool = true
-    
     @AppStorage("launchAtLoginEnabled") private var launchAtLogin: Bool = false
     
     @AppStorage("saveText") private var saveText: Bool = true
@@ -63,12 +62,27 @@ struct PreferencesView: View {
                         Section("Startup") {
                             Toggle("Launch at Login", isOn: $launchAtLogin)
                                 .onChange(of: launchAtLogin) { _, newValue in
-                                    setLaunchAtLogin(newValue)
+                                    UserDefaults.standard.set(newValue, forKey: "launchAtLoginEnabled")
+                                    if #available(macOS 13.0, *) {
+                                        if newValue {
+                                            try? SMAppService.mainApp.register()
+                                        } else {
+                                            try? SMAppService.mainApp.unregister()
+                                        }
+                                    } else {
+                                        SMLoginItemSetEnabled("com.sky.skypaste" as CFString, newValue)
+                                    }
                                 }
                         }
                         
                         Section("Behavior") {
                             Toggle("Automatically paste selected item", isOn: $autoPasteActive)
+                                .onChange(of: autoPasteActive) { _, newValue in
+                                    if newValue && !AXIsProcessTrusted() {
+                                        let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+                                        _ = AXIsProcessTrustedWithOptions(opts)
+                                    }
+                                }
                             Toggle("Paste without formatting by default", isOn: $pastePlainActive)
                             Toggle("Show notifications for copy/paste", isOn: $enableNotifications)
                                 .onChange(of: enableNotifications) { _, newValue in
@@ -182,6 +196,9 @@ struct PreferencesView: View {
         }
         .frame(width: 500, height: 450)
         .onAppear {
+            if #available(macOS 13.0, *) {
+                launchAtLogin = SMAppService.mainApp.status == .enabled
+            }
             loadFolderShortcuts()
             if enableNotifications {
                 UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
@@ -244,17 +261,7 @@ struct PreferencesView: View {
         }
     }
     
-    private func setLaunchAtLogin(_ enabled: Bool) {
-        do {
-            if enabled {
-                try SMAppService.mainApp.register()
-            } else {
-                try SMAppService.mainApp.unregister()
-            }
-        } catch {
-            launchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLoginEnabled")
-        }
-    }
+
     
     @State private var editingFolder: AppFolder? = nil
     @State private var folderToDelete: AppFolder? = nil

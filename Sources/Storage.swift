@@ -415,7 +415,7 @@ class Storage: ObservableObject {
             items = try JSONDecoder().decode([ClipboardItem].self, from: data)
             invalidateFolderCountCache()
         } catch {
-            print("Failed to load history: \(error)")
+            // Failed to load history
         }
     }
     
@@ -425,7 +425,7 @@ class Storage: ObservableObject {
             let data = try JSONEncoder().encode(items)
             try data.write(to: url)
         } catch {
-            print("Failed to save history: \(error)")
+            // Failed to save history
         }
     }
     

@@ -104,7 +104,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         UserDefaults.standard.register(defaults: [
             "enableNotifications": true,
-            "launchAtLoginEnabled": false,
+            "hasRequestedAccessibility": false,
             "hk1Key": "s",
             "hk1Modifiers": Int(NSEvent.ModifierFlags.command.rawValue),
             "hk2Key": "v",
@@ -123,13 +123,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
         setupNotificationDelegate()
         
-        if UserDefaults.standard.bool(forKey: "launchAtLoginEnabled") {
-            try? SMAppService.mainApp.register()
+        // Sync login item using correct API per OS version (fresh 2026 best practice)
+        let wantsLogin = UserDefaults.standard.bool(forKey: "launchAtLoginEnabled")
+        if #available(macOS 13.0, *) {
+            if wantsLogin {
+                try? SMAppService.mainApp.register()
+            }
+        } else {
+            // Legacy path for older macOS (still works)
+            if wantsLogin {
+                SMLoginItemSetEnabled("com.sky.skypaste" as CFString, true)
+            }
         }
-        if !AXIsProcessTrusted() {
-            let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-            _ = AXIsProcessTrustedWithOptions(opts)
-        }
+        
+        cleanOrphanedImages()
         
         if !UserDefaults.standard.bool(forKey: "hasSeenWelcome") {
             showWelcomeWindow()
@@ -152,12 +159,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     
     private func requestNotificationPermission() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
-            if let error = error {
-                print("SkyPaste: Notification permission request failed: \(error.localizedDescription)")
-            }
-            if granted {
-                print("SkyPaste: Notification permission granted")
-            }
+            _ = error // ignore notification error
         }
     }
     
@@ -237,7 +239,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             let position = UserDefaults.standard.string(forKey: "popupPosition") ?? "cursor"
             
             let button = position == "statusItem" ? self.statusBarItem.button : nil
-            WindowManager.shared.show(contentView: self.popupHostingView!, size: size, at: position, button: button)
+            if let view = self.popupHostingView {
+                WindowManager.shared.show(contentView: view, size: size, at: position, button: button)
+            }
             
             setupOutsideClickMonitor()
             NSApp.activate(ignoringOtherApps: true)
@@ -278,8 +282,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         guard shouldPaste else { return }
         
+        if !AXIsProcessTrusted() {
+            let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+            _ = AXIsProcessTrustedWithOptions(opts)
+            return
+        }
+        
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-            // Trigger paste after allowing macOS time to switch focus
             self?.monitorRef?.triggerCmdV()
         }
     }
@@ -340,10 +349,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // If app was moved to Trash, auto-run full uninstall cleanup
         let bundlePath = Bundle.main.bundlePath
         if bundlePath.contains("/.Trash/") || bundlePath.contains("/Trash/") {
-            let bundleID = "com.skytech.macvision"
+            let bundleID = "com.sky.skypaste"
             try? SMAppService.mainApp.unregister()
             let script = """
-            echo "Auto-cleanup on trash move in 5 seconds..."
             sleep 5
             /usr/bin/tccutil reset All \(bundleID) 2>/dev/null || true
             /usr/bin/tccutil reset Accessibility \(bundleID) 2>/dev/null || true
@@ -352,15 +360,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             sqlite3 /Library/Application\\ Support/com.apple.TCC/TCC.db "DELETE FROM access WHERE client LIKE '%sky%' OR client LIKE '%skypaste%' OR client LIKE '%\(bundleID)%';" 2>/dev/null || true
             rm -f /Library/Application\\ Support/com.apple.TCC/AdhocSignatureCache/* 2>/dev/null || true
             rm -f ~/Library/Application\\ Support/com.apple.TCC/AdhocSignatureCache/* 2>/dev/null || true
-            
-            # Force TCC daemon reload
             killall -HUP cfprefsd 2>/dev/null || true
             rm -rf ~/Library/Application\\ Support/SkyPaste ~/Library/Application\\ Support/com.sky* ~/Library/Caches/SkyPaste ~/Library/Caches/com.sky* ~/Library/Logs/SkyPaste ~/Library/Logs/com.sky* ~/.SkyPaste ~/Library/Preferences/com.sky* ~/Library/Preferences/com.sky.skypaste* ~/Library/Preferences/\(bundleID)* ~/Library/Containers/com.sky* ~/Library/Containers/\(bundleID)* 2>/dev/null || true
             /usr/bin/defaults delete \(bundleID) 2>/dev/null || true
             /usr/bin/defaults delete \(bundleID) hasSeenWelcome 2>/dev/null || true
             /usr/bin/defaults delete \(bundleID) hasRequestedNotifications 2>/dev/null || true
+            /usr/bin/defaults delete \(bundleID) hasRequestedAccessibility 2>/dev/null || true
             /bin/launchctl remove \(bundleID) 2>/dev/null || true
-            rm -f ~/Library/LaunchAgents/\(bundleID)*.plist 2>/dev/null || true
+            rm -f ~/Library/LaunchAgents/\(bundleID)*.plist /Library/LaunchAgents/\(bundleID)*.plist 2>/dev/null || true
             """
             let p = Process()
             p.launchPath = "/bin/bash"
@@ -375,6 +382,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         WindowManager.shared.close()
         settingsWindow = nil
         welcomeWindow = nil
+    }
+    
+    @MainActor
+    private func cleanOrphanedImages() {
+        let imagesDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("SkyPaste/Images")
+        
+        guard let currentItems = globalStore?.items else { return }
+        let referencedURLs = Set(currentItems.compactMap { $0.fileURL?.lastPathComponent })
+        
+        do {
+            let files = try FileManager.default.contentsOfDirectory(at: imagesDir, includingPropertiesForKeys: nil)
+            for file in files {
+                if !referencedURLs.contains(file.lastPathComponent) {
+                    try? FileManager.default.removeItem(at: file)
+                }
+            }
+        } catch {}
     }
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

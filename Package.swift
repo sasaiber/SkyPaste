@@ -9,6 +9,7 @@ let package = Package(
     products: [
         .executable(name: "SkyPaste", targets: ["SkyPaste"])
     ],
+
     targets: [
         .executableTarget(
             name: "SkyPaste",

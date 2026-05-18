@@ -25,8 +25,7 @@ struct ClipboardItemRow: View {
     @AppStorage("previewDelay") private var previewDelay: Double = 200
     @AppStorage("showSpecialSymbols") private var showSpecialSymbols: Bool = true
     
-    @State private var asyncAppIcon: NSImage? = nil
-    @State private var asyncThumbnail: NSImage? = nil
+
     
     private func formatShortcut(key: String, modifiers: Int) -> String {
         let flags = NSEvent.ModifierFlags(rawValue: UInt(modifiers))
@@ -96,41 +95,45 @@ struct ClipboardItemRow: View {
                         // Show first thumbnail only
                         if let firstURL = imageURLs.first {
                             Group {
-                                if let thumb = asyncThumbnail {
-                                    Image(nsImage: thumb)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 48, height: 48)
-                                        .cornerRadius(6)
-                                        .clipped()
-                                        .background(Color.gray.opacity(0.2))
-                                } else {
-                                    Rectangle().fill(Color.gray.opacity(0.2)).frame(width: 48, height: 48).cornerRadius(6)
-                                }
+                                 if let thumb = ImageCache.shared.image(for: firstURL) {
+                                     Image(nsImage: thumb)
+                                         .resizable()
+                                         .scaledToFill()
+                                         .frame(width: 48, height: 48)
+                                         .cornerRadius(6)
+                                         .clipped()
+                                         .background(Color.gray.opacity(0.2))
+                                 } else {
+                                     Rectangle().fill(Color.gray.opacity(0.2)).frame(width: 48, height: 48).cornerRadius(6)
+                                 }
                             }
-                            .onAppear {
-                                loadThumbnailAsync(url: firstURL)
-                            }
+                             .onAppear {
+                                 if ImageCache.shared.image(for: firstURL) == nil {
+                                     ImageCache.shared.asyncThumbnail(url: firstURL) { _ in }
+                                 }
+                             }
                         }
                     }
                 } else if item.type == .image || (item.type == .file && isImageURL(item.fileURL)), 
                    let url = item.fileURL {
                     
                     Group {
-                        if let thumb = asyncThumbnail {
-                            Image(nsImage: thumb)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 36, height: 36)
-                                .cornerRadius(6)
+                         if let thumb = ImageCache.shared.image(for: url) {
+                             Image(nsImage: thumb)
+                                 .resizable()
+                                 .scaledToFill()
+                                 .frame(width: 36, height: 36)
+                                 .cornerRadius(6)
                                 .clipped()
                         } else {
                             Rectangle().fill(Color.gray.opacity(0.2)).frame(width: 36, height: 36).cornerRadius(6)
                         }
                     }
-                    .onAppear {
-                        loadThumbnailAsync(url: url)
-                    }
+                     .onAppear {
+                         if ImageCache.shared.image(for: url) == nil {
+                             ImageCache.shared.asyncThumbnail(url: url) { _ in }
+                         }
+                     }
                     
                     if item.type == .file {
                         Text(url.path)
@@ -579,34 +582,7 @@ struct ClipboardItemRow: View {
         return nil
     }
     
-    private func loadThumbnailAsync(url: URL) {
-        if asyncThumbnail != nil { return }
-        if let cached = ImageCache.shared.image(for: url) {
-            self.asyncThumbnail = cached
-            return
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let thumbSize = NSSize(width: 48, height: 48)
-            guard let fullImage = NSImage(contentsOf: url) else {
-                let placeholder = NSImage(systemSymbolName: "photo.fill", accessibilityDescription: nil) ?? NSImage()
-                DispatchQueue.main.async { self.asyncThumbnail = placeholder }
-                return
-            }
-            
-            let scaledImage = NSImage(size: thumbSize)
-            scaledImage.size = thumbSize
-            
-            scaledImage.lockFocus()
-            NSColor.white.setFill()
-            NSBezierPath(rect: NSRect(origin: .zero, size: thumbSize)).fill()
-            fullImage.draw(in: NSRect(origin: .zero, size: thumbSize))
-            scaledImage.unlockFocus()
-            
-            ImageCache.shared.setImage(scaledImage, for: url)
-            DispatchQueue.main.async { self.asyncThumbnail = scaledImage }
-        }
-    }
+
     
     private func getThumbnail(url: URL) -> NSImage {
         // Check cache first
@@ -616,11 +592,8 @@ struct ClipboardItemRow: View {
         
         // Load image from file URL
         guard let fullImage = NSImage(contentsOf: url) else {
-            print("❌ Failed to load image from: \(url.path)")
             return NSImage(systemSymbolName: "photo.fill", accessibilityDescription: nil) ?? NSImage()
         }
-        
-        print("✅ Loaded image from: \(url.path)")
         
         let thumbSize = NSSize(width: 48, height: 48)
         let scaledImage = NSImage(size: thumbSize)

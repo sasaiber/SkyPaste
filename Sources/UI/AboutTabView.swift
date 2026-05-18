@@ -204,13 +204,12 @@ struct AboutTabView: View {
     
     private func performUninstall() {
         let appPath = Bundle.main.bundlePath
-        let bundleID = "com.skytech.macvision"
+        let bundleID = "com.sky.skypaste"
         
         try? SMAppService.mainApp.unregister()
         
         let script = """
-        sleep 2
-        
+        sleep 3
         /usr/bin/tccutil reset All \(bundleID) 2>/dev/null || true
         /usr/bin/tccutil reset Accessibility \(bundleID) 2>/dev/null || true
         /usr/bin/tccutil reset Notifications \(bundleID) 2>/dev/null || true
@@ -226,12 +225,10 @@ struct AboutTabView: View {
         rm -rf ~/.SkyPaste 2>/dev/null || true
         rm -rf ~/Library/Preferences/com.sky* ~/Library/Preferences/com.sky.skypaste* ~/Library/Preferences/\(bundleID)* 2>/dev/null || true
         rm -rf ~/Library/Containers/com.sky* ~/Library/Containers/\(bundleID)* 2>/dev/null || true
+        rm -f ~/Library/LaunchAgents/\(bundleID)*.plist /Library/LaunchAgents/\(bundleID)*.plist 2>/dev/null || true
         /usr/bin/defaults delete \(bundleID) 2>/dev/null || true
         /bin/launchctl remove \(bundleID) 2>/dev/null || true
-        rm -f ~/Library/LaunchAgents/\(bundleID)*.plist 2>/dev/null || true
-        
-        sleep 1
-        
+        sleep 2
         /bin/rm -rf "\(appPath)"
         """
         

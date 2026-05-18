@@ -57,7 +57,7 @@ class UpdateChecker: ObservableObject {
     
     private let repoOwner = "sasaiber"
     private let repoName = "SkyPaste"
-    private let logger = Logger(subsystem: "com.skytech.macvision", category: "UpdateChecker")
+    private let logger = Logger(subsystem: "com.sky.skypaste", category: "UpdateChecker")
     
     private var zipDownloadURL: String?
     
@@ -140,7 +140,7 @@ class UpdateChecker: ObservableObject {
             
             lastCheckDate = Date()
             
-            if isVersionNewer(latestTag, than: currentVersion) {
+            if latestTag != currentVersion && isVersionNewer(latestTag, than: currentVersion) {
                 updateAvailable = true
                 latestVersion = latestTag
                 releaseNotes = release.body

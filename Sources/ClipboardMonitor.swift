@@ -33,15 +33,14 @@ class ClipboardMonitor: ObservableObject {
             }
             
             let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-            UNUserNotificationCenter.current().add(request) { error in
-                if let error = error { print("Notification error: \(error)") }
-            }
+            UNUserNotificationCenter.current().add(request) { _ in }
+           
         }
     }
 
     func start() {
         timer = Timer.scheduledTimer(
-            withTimeInterval: 0.75,
+            withTimeInterval: 1.0,
             repeats: true
         ) { [weak self] _ in
             self?.checkForChanges()
@@ -91,24 +90,27 @@ class ClipboardMonitor: ObservableObject {
                     }
                 }
                 
-                if !imageURLs.isEmpty {
+            if !imageURLs.isEmpty {
+                let urls = imageURLs
+                Task.detached {
                     let item = ClipboardItem(
                         timestamp: Date(),
                         firstCopiedAt: Date(),
                         type: .image,
-                        textContent: imageURLs.map { $0.absoluteString }.joined(separator: "\n"),
-                        title: imageURLs.count > 1 ? "\(imageURLs.count) images" : "Image",
-                        fileURL: imageURLs.first,
-                        sizeLabel: "\(imageURLs.count) image\(imageURLs.count > 1 ? "s" : "")",
+                        textContent: urls.map { $0.absoluteString }.joined(separator: "\n"),
+                        title: urls.count > 1 ? "\(urls.count) images" : "Image",
+                        fileURL: urls.first,
+                        sizeLabel: "\(urls.count) image\(urls.count > 1 ? "s" : "")",
                         appSource: sourceApp,
                         appBundleID: sourceBundleID
                     )
-                    Task { @MainActor in
-                storage.addItem(item)
-                self.sendNotification(title: "Copied", body: item.title ?? "Clipboard Item")
-            }
-                    return
+                    await MainActor.run {
+                        self.storage.addItem(item)
+                        self.sendNotification(title: "Copied", body: item.title ?? "Clipboard Item")
+                    }
                 }
+                return
+            }
             }
             
             // Not all images, treat as regular files
@@ -161,24 +163,27 @@ class ClipboardMonitor: ObservableObject {
             }
         }
         
-        if !imageURLs.isEmpty {
-            let item = ClipboardItem(
-                timestamp: Date(),
-                firstCopiedAt: Date(),
-                type: .image,
-                textContent: imageURLs.map { $0.absoluteString }.joined(separator: "\n"),
-                title: imageURLs.count > 1 ? "\(imageURLs.count) images" : "Image",
-                fileURL: imageURLs.first,
-                sizeLabel: "\(imageURLs.count) image\(imageURLs.count > 1 ? "s" : "")",
-                appSource: sourceApp,
-                appBundleID: sourceBundleID
-            )
-            Task { @MainActor in
-                storage.addItem(item)
-                self.sendNotification(title: "Copied", body: item.title ?? "Clipboard Item")
+            if !imageURLs.isEmpty {
+                let urls = imageURLs
+                Task.detached {
+                    let item = ClipboardItem(
+                        timestamp: Date(), 
+                        firstCopiedAt: Date(), 
+                        type: .image,
+                        textContent: urls.map { $0.absoluteString }.joined(separator: "\n"),
+                        title: urls.count > 1 ? "\(urls.count) images" : "Image",
+                        fileURL: urls.first,
+                        sizeLabel: "\(urls.count) image\(urls.count > 1 ? "s" : "")",
+                        appSource: sourceApp, 
+                        appBundleID: sourceBundleID
+                    )
+                    await MainActor.run {
+                        self.storage.addItem(item)
+                        self.sendNotification(title: "Copied", body: item.title ?? "Clipboard Item")
+                    }
+                }
+                return
             }
-            return
-        }
 
         // 3. URLs / Links
         if types.contains(.URL),
@@ -291,9 +296,28 @@ class ClipboardMonitor: ObservableObject {
             .appendingPathComponent("SkyPaste/Images", isDirectory: true)
         do {
             try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-            let fileName = UUID().uuidString + ".png"
+            
+            guard let image = NSImage(data: data) else { return nil }
+            guard let tiff = image.tiffRepresentation,
+                  let rep = NSBitmapImageRep(data: tiff) else { return nil }
+            
+            let maxSize: Int = 2_000_000
+            var finalData: Data = data
+            
+            if data.count > maxSize {
+                if let jpegData = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.85]) {
+                    finalData = jpegData
+                }
+            } else {
+                if let pngData = rep.representation(using: .png, properties: [:]) {
+                    finalData = pngData
+                }
+            }
+            
+            let ext = finalData.count > maxSize ? "jpg" : "png"
+            let fileName = UUID().uuidString + "." + ext
             let url = base.appendingPathComponent(fileName)
-            try data.write(to: url, options: .atomic)
+            try finalData.write(to: url, options: .atomic)
             return url
         } catch {
             return nil
