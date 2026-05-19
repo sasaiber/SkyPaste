@@ -7,6 +7,10 @@ class Storage: ObservableObject {
     @Published var items: [ClipboardItem] = []
     @Published var folders: [AppFolder] = []
     
+    // Popover inner state for shortcuts
+    @Published var popoverSelectedURLs: [URL] = []
+    @Published var popoverHoveredURL: URL? = nil
+    
     // Cached folder item counts (updated when items change)
     private var folderItemCountCache: [UUID: Int] = [:]
     
@@ -214,7 +218,7 @@ class Storage: ObservableObject {
     
     func factoryReset() {
         // Remove from login items
-        try? SMAppService.mainApp.unregister()
+        SMAppService.mainApp.unregisterSafe()
         
         // Clear all files
         if let dir = documentDirectory {
@@ -233,10 +237,26 @@ class Storage: ObservableObject {
         }
     }
     
-    func createFolder(name: String, emoji: String? = nil, colorHex: String? = nil) {
-        let folder = AppFolder(name: name, emoji: emoji, colorHex: colorHex)
+    func createFolder(name: String, emoji: String? = nil, colorHex: String? = nil, appBundleIDs: [String] = []) {
+        var folder = AppFolder(name: name, emoji: emoji, colorHex: colorHex, order: folders.count)
+        folder.appBundleIDs = appBundleIDs
         folders.append(folder)
         saveFolders()
+    }
+    
+    func reorderFolders(from source: IndexSet, to destination: Int) {
+        folders.move(fromOffsets: source, toOffset: destination)
+        for i in folders.indices {
+            folders[i].order = i
+        }
+        saveFolders()
+    }
+    
+    func updateFolderAppBindings(id: UUID, bundleIDs: [String]) {
+        if let index = folders.firstIndex(where: { $0.id == id }) {
+            folders[index].appBundleIDs = bundleIDs
+            saveFolders()
+        }
     }
     
     func deleteFolder(id: UUID) {
@@ -357,6 +377,30 @@ class Storage: ObservableObject {
         }
     }
     
+    func deleteFiles(urlsToDelete: [URL], from itemID: UUID) {
+        invalidateFolderCountCache()
+        if let index = items.firstIndex(where: { $0.id == itemID }) {
+            var updatedItem = items[index]
+            let oldContent = updatedItem.textContent ?? ""
+            var remainingURLs = oldContent.components(separatedBy: "\n").filter { !$0.isEmpty }.compactMap { URL(string: $0) ?? URL(fileURLWithPath: $0) }
+            
+            remainingURLs.removeAll { urlsToDelete.contains($0) }
+            
+            if remainingURLs.isEmpty {
+                deleteItem(with: itemID)
+            } else {
+                updatedItem.textContent = remainingURLs.map { $0.absoluteString }.joined(separator: "\n")
+                updatedItem.title = remainingURLs.count > 1 ? "\(remainingURLs.count) files" : remainingURLs.first?.lastPathComponent
+                updatedItem.fileURL = remainingURLs.first
+                updatedItem.fileCount = remainingURLs.count
+                items[index] = updatedItem
+                saveItems()
+            }
+            popoverSelectedURLs.removeAll { urlsToDelete.contains($0) }
+            if let hovered = popoverHoveredURL, urlsToDelete.contains(hovered) { popoverHoveredURL = nil }
+        }
+    }
+    
     func moveToTop(for id: UUID) {
         invalidateFolderCountCache()
         if let index = items.firstIndex(where: { $0.id == id }) {
@@ -436,7 +480,9 @@ class Storage: ObservableObject {
     private func loadFolders() {
         guard let url = foldersFile, let data = try? Data(contentsOf: url) else { return }
         do {
-            folders = try JSONDecoder().decode([AppFolder].self, from: data)
+            var loaded = try JSONDecoder().decode([AppFolder].self, from: data)
+            loaded.sort { $0.order < $1.order }
+            folders = loaded
         } catch {}
     }
     

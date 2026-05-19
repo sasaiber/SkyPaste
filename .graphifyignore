@@ -1,0 +1,46 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Build artifacts
+build/
+.build/
+.swiftpm/
+DerivedData/
+*.swiftmodule
+*.swiftdoc
+*.swiftinterface
+*.swiftmodule
+*.o
+*.d
+
+# Xcode
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad
+
+# Logs and temp
+*.log
+build.log
+*.tmp
+
+# Unrelated assets and folders
+clip.mp3
+AppIcon.icns
+AppIcon.jpeg
+Swift-*.swiftmodule
+Maccy-2.6.1/
+.vscode/
+GEMINI.md
+AGENTS.md
+
+# Large generated files
+*.app
+*.dSYM
+*.zip
+
+# Package dependencies (if using resolved)
+Package.resolved

@@ -1,0 +1,297 @@
+{
+  "/Users/sky/Documents/SkyPaste/build.sh": {
+    "mtime": 1779029989.8035626,
+    "ast_hash": "6b56e3eb12e2f297efbd1080c3c4c65e",
+    "semantic_hash": "6b56e3eb12e2f297efbd1080c3c4c65e"
+  },
+  "/Users/sky/Documents/SkyPaste/Package.swift": {
+    "mtime": 1779062842.802426,
+    "ast_hash": "4a61bfcbcca7f2f30d37aa63851ba815",
+    "semantic_hash": "4a61bfcbcca7f2f30d37aa63851ba815"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/package.json": {
+    "mtime": 1779140976.5829704,
+    "ast_hash": "121ff780fd6a4b705ce4bc9364de553b",
+    "semantic_hash": "121ff780fd6a4b705ce4bc9364de553b"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/agent-manager.json": {
+    "mtime": 1779069586.3536062,
+    "ast_hash": "ac08eac2cf73d49096da24de259974b7",
+    "semantic_hash": "ac08eac2cf73d49096da24de259974b7"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/build.sh": {
+    "mtime": 1779069585.52331,
+    "ast_hash": "6b56e3eb12e2f297efbd1080c3c4c65e",
+    "semantic_hash": "6b56e3eb12e2f297efbd1080c3c4c65e"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/Package.swift": {
+    "mtime": 1779069585.5160859,
+    "ast_hash": "4a61bfcbcca7f2f30d37aa63851ba815",
+    "semantic_hash": "4a61bfcbcca7f2f30d37aa63851ba815"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/Sources/Storage.swift": {
+    "mtime": 1779069585.5191104,
+    "ast_hash": "0bffd7723484c0dfe3b0583e85a9ff5d",
+    "semantic_hash": "0bffd7723484c0dfe3b0583e85a9ff5d"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/Sources/ImageCache.swift": {
+    "mtime": 1779069585.5177982,
+    "ast_hash": "0999edb252062a8658f49e2976d32a98",
+    "semantic_hash": "0999edb252062a8658f49e2976d32a98"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/Sources/ClipboardMonitor.swift": {
+    "mtime": 1779069585.5760014,
+    "ast_hash": "96416d7dd2a061fa75324bbfe0b3aae1",
+    "semantic_hash": "96416d7dd2a061fa75324bbfe0b3aae1"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/Sources/HotkeyManager.swift": {
+    "mtime": 1779069585.5174108,
+    "ast_hash": "5d6b2e1aff2d647ae524ca5929f7cf9a",
+    "semantic_hash": "5d6b2e1aff2d647ae524ca5929f7cf9a"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/Sources/UpdateChecker.swift": {
+    "mtime": 1779069585.5231152,
+    "ast_hash": "28b404b6f1d6d8227042c9c248c0f3bd",
+    "semantic_hash": "28b404b6f1d6d8227042c9c248c0f3bd"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/Sources/Extensions.swift": {
+    "mtime": 1779069585.5760648,
+    "ast_hash": "2fa287df8aa4287788c732c0aca2452e",
+    "semantic_hash": "2fa287df8aa4287788c732c0aca2452e"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/Sources/Models.swift": {
+    "mtime": 1779069585.5185568,
+    "ast_hash": "b29e0e74a24e21699df115aa60b7ce7e",
+    "semantic_hash": "b29e0e74a24e21699df115aa60b7ce7e"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/Sources/App.swift": {
+    "mtime": 1779069585.5166032,
+    "ast_hash": "6527f30276b3419aeaeff2dfe95752e2",
+    "semantic_hash": "6527f30276b3419aeaeff2dfe95752e2"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/Sources/UI/FoldersTabView.swift": {
+    "mtime": 1779069585.5212674,
+    "ast_hash": "872bf68119c1cac9db6bef9a52ac6ad9",
+    "semantic_hash": "872bf68119c1cac9db6bef9a52ac6ad9"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/Sources/UI/AboutTabView.swift": {
+    "mtime": 1779069585.5197482,
+    "ast_hash": "f4e563de535b4aa405472b15214cf655",
+    "semantic_hash": "f4e563de535b4aa405472b15214cf655"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/Sources/UI/FolderEditView.swift": {
+    "mtime": 1779069585.5209243,
+    "ast_hash": "6798ca95c755eabac30800395e91df78",
+    "semantic_hash": "6798ca95c755eabac30800395e91df78"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/Sources/UI/PreferencesView.swift": {
+    "mtime": 1779069585.5762007,
+    "ast_hash": "63717d44e0798f506c8ad8f4797f43ef",
+    "semantic_hash": "63717d44e0798f506c8ad8f4797f43ef"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/Sources/UI/StorageTabView.swift": {
+    "mtime": 1779069585.5223405,
+    "ast_hash": "b98454fab82068c4a3c1d255a606aefc",
+    "semantic_hash": "b98454fab82068c4a3c1d255a606aefc"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/Sources/UI/WelcomeView.swift": {
+    "mtime": 1779069585.5227675,
+    "ast_hash": "212c05f199cef358eedf32ebc1ae096a",
+    "semantic_hash": "212c05f199cef358eedf32ebc1ae096a"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/Sources/UI/ClipboardItemRow.swift": {
+    "mtime": 1779069585.576128,
+    "ast_hash": "cf74b0e8680b263a548bf91e0fefd909",
+    "semantic_hash": "cf74b0e8680b263a548bf91e0fefd909"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/Sources/UI/EmojiPickerButton.swift": {
+    "mtime": 1779069585.5202575,
+    "ast_hash": "5a8ee4de1f78598d3649fb1dfe8d001a",
+    "semantic_hash": "5a8ee4de1f78598d3649fb1dfe8d001a"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/Sources/UI/MainView.swift": {
+    "mtime": 1779069585.5215225,
+    "ast_hash": "d746a0814604e0d3753090566335859d",
+    "semantic_hash": "d746a0814604e0d3753090566335859d"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/Sources/UI/ShortcutRecorder.swift": {
+    "mtime": 1779069585.521911,
+    "ast_hash": "5d1c081e7e5334db2ca12c0ff8a583c4",
+    "semantic_hash": "5d1c081e7e5334db2ca12c0ff8a583c4"
+  },
+  "/Users/sky/Documents/SkyPaste/Sources/Storage.swift": {
+    "mtime": 1779228094.0313482,
+    "ast_hash": "ce1021d24cb7076a86d3fb81fe7e50ae",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Sources/ImageCache.swift": {
+    "mtime": 1779064244.0906205,
+    "ast_hash": "0999edb252062a8658f49e2976d32a98",
+    "semantic_hash": "0999edb252062a8658f49e2976d32a98"
+  },
+  "/Users/sky/Documents/SkyPaste/Sources/ClipboardMonitor.swift": {
+    "mtime": 1779128742.0192926,
+    "ast_hash": "2d210c17f6c2880e59a4de53984a0dcf",
+    "semantic_hash": "2d210c17f6c2880e59a4de53984a0dcf"
+  },
+  "/Users/sky/Documents/SkyPaste/Sources/HotkeyManager.swift": {
+    "mtime": 1779228357.629068,
+    "ast_hash": "6979c6171853356e01d67445abf5e096",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Sources/UpdateChecker.swift": {
+    "mtime": 1779061655.6471694,
+    "ast_hash": "28b404b6f1d6d8227042c9c248c0f3bd",
+    "semantic_hash": "28b404b6f1d6d8227042c9c248c0f3bd"
+  },
+  "/Users/sky/Documents/SkyPaste/Sources/ThumbnailGenerator.swift": {
+    "mtime": 1779128728.9749272,
+    "ast_hash": "67f8d044c6f04da74eda794d10ded04b",
+    "semantic_hash": "67f8d044c6f04da74eda794d10ded04b"
+  },
+  "/Users/sky/Documents/SkyPaste/Sources/Extensions.swift": {
+    "mtime": 1779222434.7198982,
+    "ast_hash": "b2d17bafc0358251edb3924fab97a532",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Sources/Models.swift": {
+    "mtime": 1779151380.9696853,
+    "ast_hash": "bf888597d70df0063dff7f1cee8b4fe4",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Sources/App.swift": {
+    "mtime": 1779228094.0295115,
+    "ast_hash": "62147c4cfeac6ce18a1c8fb130dc3034",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Sources/UI/FoldersTabView.swift": {
+    "mtime": 1779206894.0173233,
+    "ast_hash": "7b7127f72c59207b6dd9a261347a8335",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Sources/UI/AboutTabView.swift": {
+    "mtime": 1779224075.255384,
+    "ast_hash": "4c3eed2bd55f20a8764f9667fb9e68cb",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Sources/UI/FolderEditView.swift": {
+    "mtime": 1779207921.3705943,
+    "ast_hash": "533517cb9b61a367c5171cf0ddc5f1af",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Sources/UI/PreferencesView.swift": {
+    "mtime": 1779223603.1729906,
+    "ast_hash": "f4aa82dff2ddc53ab7ad6ddc511c3e82",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Sources/UI/StorageTabView.swift": {
+    "mtime": 1779043970.9927747,
+    "ast_hash": "b98454fab82068c4a3c1d255a606aefc",
+    "semantic_hash": "b98454fab82068c4a3c1d255a606aefc"
+  },
+  "/Users/sky/Documents/SkyPaste/Sources/UI/WelcomeView.swift": {
+    "mtime": 1779222763.7871916,
+    "ast_hash": "c1fa738cbb78c86bdc4424707ee274fe",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Sources/UI/ClipboardItemRow.swift": {
+    "mtime": 1779228649.220067,
+    "ast_hash": "4a127e89e4fe899e1cf6a1254d465415",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Sources/UI/EmojiPickerButton.swift": {
+    "mtime": 1779208039.0246131,
+    "ast_hash": "ed0bff903cb0fb61e7a6aabf79f626ed",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Sources/UI/MainView.swift": {
+    "mtime": 1779229726.716309,
+    "ast_hash": "41b71b2c8eb3d86fd0670af0b44506dc",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Sources/UI/ShortcutRecorder.swift": {
+    "mtime": 1779229309.3266218,
+    "ast_hash": "25c36cdade03045d685e99a42ca81447",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/PRIVACY_POLICY.md": {
+    "mtime": 1779028918.4619439,
+    "ast_hash": "2f2541ffe348d661dfae8fc5e0a77c90",
+    "semantic_hash": "2f2541ffe348d661dfae8fc5e0a77c90"
+  },
+  "/Users/sky/Documents/SkyPaste/README.md": {
+    "mtime": 1779151192.8803005,
+    "ast_hash": "d5d37ab651c7bdd366d735c100ed350e",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/clipboard_media_task.md": {
+    "mtime": 1779128175.4131277,
+    "ast_hash": "c2817deea024605b40e225eec2fe7297",
+    "semantic_hash": "c2817deea024605b40e225eec2fe7297"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/PRIVACY_POLICY.md": {
+    "mtime": 1779069585.5158465,
+    "ast_hash": "2f2541ffe348d661dfae8fc5e0a77c90",
+    "semantic_hash": "2f2541ffe348d661dfae8fc5e0a77c90"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/README.md": {
+    "mtime": 1779069585.5162992,
+    "ast_hash": "eecb87a465311dcef02f03f0acd78dff",
+    "semantic_hash": "eecb87a465311dcef02f03f0acd78dff"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/screen/folders.png": {
+    "mtime": 1779069585.5262246,
+    "ast_hash": "809c51d034a3bb6e7ef906e2f5a6971c",
+    "semantic_hash": "809c51d034a3bb6e7ef906e2f5a6971c"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/screen/settings.png": {
+    "mtime": 1779069585.5398064,
+    "ast_hash": "908093230923ee8a4f1630768f462d41",
+    "semantic_hash": "908093230923ee8a4f1630768f462d41"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/screen/main.png": {
+    "mtime": 1779069585.5338202,
+    "ast_hash": "f94853987f771ae8d6aee08acfc6878b",
+    "semantic_hash": "f94853987f771ae8d6aee08acfc6878b"
+  },
+  "/Users/sky/Documents/SkyPaste/.kilo/worktrees/excellent-cloud/screen/shortcuts.png": {
+    "mtime": 1779069585.5428782,
+    "ast_hash": "f6a31c79de5f6fb68496f4a70de13dac",
+    "semantic_hash": "f6a31c79de5f6fb68496f4a70de13dac"
+  },
+  "/Users/sky/Documents/SkyPaste/screen/folders.png": {
+    "mtime": 1779028918.4720964,
+    "ast_hash": "809c51d034a3bb6e7ef906e2f5a6971c",
+    "semantic_hash": "809c51d034a3bb6e7ef906e2f5a6971c"
+  },
+  "/Users/sky/Documents/SkyPaste/screen/settings.png": {
+    "mtime": 1779028918.4799426,
+    "ast_hash": "908093230923ee8a4f1630768f462d41",
+    "semantic_hash": "908093230923ee8a4f1630768f462d41"
+  },
+  "/Users/sky/Documents/SkyPaste/screen/main.png": {
+    "mtime": 1779028918.4767876,
+    "ast_hash": "f94853987f771ae8d6aee08acfc6878b",
+    "semantic_hash": "f94853987f771ae8d6aee08acfc6878b"
+  },
+  "/Users/sky/Documents/SkyPaste/screen/shortcuts.png": {
+    "mtime": 1779028918.4813647,
+    "ast_hash": "f6a31c79de5f6fb68496f4a70de13dac",
+    "semantic_hash": "f6a31c79de5f6fb68496f4a70de13dac"
+  },
+  "/Users/sky/Documents/SkyPaste/.agents/workflows/graphify.md": {
+    "mtime": 1779155589.9828176,
+    "ast_hash": "afa1ffc01aa56ac681c7335686f44767",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/.agents/rules/graphify.md": {
+    "mtime": 1779155589.9826846,
+    "ast_hash": "f1e53ecc9194573d3c28fc116c743a2e",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/fix_mainview.py": {
+    "mtime": 1779228009.4760528,
+    "ast_hash": "9880638e4a95aefdb6d71dc38c3fe114",
+    "semantic_hash": ""
+  }
+}

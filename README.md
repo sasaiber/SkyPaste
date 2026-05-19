@@ -25,6 +25,40 @@ SkyPaste is a lightweight, efficient clipboard manager for macOS, designed with 
 
 ![Settings](screen/settings.png)
 
+## Keyboard Shortcuts
+
+### Global Shortcuts
+
+| Action | Default Shortcut | Configurable |
+|--------|-----------------|--------------|
+| Show SkyPaste | ⌘S | ✅ |
+| Paste Plain Text | ⌘⇧⌥V | ✅ |
+
+### In-App Shortcuts (when SkyPaste window is open)
+
+| Action | Default Shortcut | Configurable |
+|--------|-----------------|--------------|
+| Quick Pin | ⌘P | ✅ |
+| Quick Delete | ⌘⌫ | ✅ |
+| Create Folder | ⌘F | ✅ |
+| View in Finder | ⇧⌘F | ✅ |
+| Library (All Folders) | ⌥A | ✅ |
+
+### Preview Panel Shortcuts (hover over an item to see preview)
+
+| Action | Shortcut |
+|--------|----------|
+| Pin / Unpin | ⌘P (configurable) |
+| Delete | ⌘⌫ (configurable) |
+| View in Finder | ⇧⌘F (configurable) |
+| Click to Paste | Left Click |
+| Paste Plain Text | ⌥+Click |
+| Select single file | ⌘+Click |
+| Toggle select files | ⇧+Click (add/remove) |
+| Context menu (copy, pin, delete) | Right Click |
+
+> All in-app shortcuts can be customized in **Settings → Shortcuts** tab.
+
 ## Privacy
 
 Your privacy is paramount. Read our [Privacy Policy](PRIVACY_POLICY.md) to learn how SkyPaste operates:

@@ -18,11 +18,23 @@ struct WelcomeView: View {
     @AppStorage("hk1Key") private var hk1Key: String = "s"
     @AppStorage("hk1Modifiers") private var hk1Modifiers: Int = Int(NSEvent.ModifierFlags.command.rawValue)
     
+    @AppStorage("hk2Key") private var hk2Key: String = "v"
+    @AppStorage("hk2Modifiers") private var hk2Modifiers: Int = Int(NSEvent.ModifierFlags.command.rawValue | NSEvent.ModifierFlags.shift.rawValue | NSEvent.ModifierFlags.option.rawValue)
+    
+    @AppStorage("hkPinKey") private var hkPinKey: String = "p"
+    @AppStorage("hkPinModifiers") private var hkPinModifiers: Int = Int(NSEvent.ModifierFlags.command.rawValue)
+    
     @AppStorage("hkDeleteKey") private var hkDeleteKey: String = "delete"
     @AppStorage("hkDeleteModifiers") private var hkDeleteModifiers: Int = Int(NSEvent.ModifierFlags.command.rawValue)
     
     @AppStorage("hkFolderKey") private var hkFolderKey: String = "f"
     @AppStorage("hkFolderModifiers") private var hkFolderModifiers: Int = Int(NSEvent.ModifierFlags.command.rawValue)
+    
+    @AppStorage("hkFinderKey") private var hkFinderKey: String = "f"
+    @AppStorage("hkFinderModifiers") private var hkFinderModifiers: Int = Int(NSEvent.ModifierFlags.command.rawValue | NSEvent.ModifierFlags.shift.rawValue)
+    
+    @AppStorage("hkLibraryKey") private var hkLibraryKey: String = "a"
+    @AppStorage("hkLibraryModifiers") private var hkLibraryModifiers: Int = Int(NSEvent.ModifierFlags.option.rawValue)
     @AppStorage("launchAtLoginEnabled") private var launchAtLogin: Bool = false
     
     var body: some View {
@@ -35,7 +47,7 @@ struct WelcomeView: View {
                     .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
             }
         }
-        .frame(width: 500, height: 550)
+        .frame(width: 500, height: 720)
         .background(VisualEffectView(material: .hudWindow, blendingMode: .behindWindow).ignoresSafeArea())
         .onAppear {
             if #available(macOS 13.0, *) {
@@ -160,75 +172,86 @@ struct WelcomeView: View {
     }
     
     private var shortcutsStep: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             Image(systemName: "keyboard.fill")
-                .font(.system(size: 50))
+                .font(.system(size: 44))
                 .foregroundStyle(.purple.gradient)
-                .padding(.top, 30)
+                .padding(.top, 24)
             
-            VStack(spacing: 6) {
-                Text("Configure Your Workflow")
-                    .font(.system(size: 26, weight: .bold))
-                Text("Customize your shortcuts and launch behavior.")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                Text("Click any shortcut below to change it.")
+            VStack(spacing: 4) {
+                Text("Your Keyboard Shortcuts")
+                    .font(.system(size: 24, weight: .bold))
+                Text("Click any shortcut to change it.")
                     .font(.caption)
                     .foregroundColor(.accentColor)
             }
             
-            VStack(spacing: 12) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Show SkyPaste").fontWeight(.medium)
-                        Text("Open clipboard history anytime.").font(.caption).foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    ShortcutRecorder(actionName: "Show SkyPaste", keyString: $hk1Key, modifiers: $hk1Modifiers, onValidate: { _,_,_ in nil })
-                        .scaleEffect(0.9)
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 10) {
+                    // Global shortcuts
+                    Text("Global (works anywhere)").font(.caption2).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 40)
+                    
+                    shortcutRow(title: "Show SkyPaste", desc: "Open clipboard history", key: $hk1Key, mod: $hk1Modifiers)
+                    shortcutRow(title: "Paste Plain Text", desc: "Paste without formatting", key: $hk2Key, mod: $hk2Modifiers)
+                    
+                    Divider().padding(.horizontal, 40)
+                    
+                    // In-app shortcuts
+                    Text("In SkyPaste window").font(.caption2).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 40)
+                    
+                    shortcutRow(title: "Quick Pin", desc: "Pin/unpin hovered item", key: $hkPinKey, mod: $hkPinModifiers)
+                    shortcutRow(title: "Quick Delete", desc: "Delete hovered item", key: $hkDeleteKey, mod: $hkDeleteModifiers)
+                    shortcutRow(title: "Create Folder", desc: "Move item to new folder", key: $hkFolderKey, mod: $hkFolderModifiers)
+                    shortcutRow(title: "View in Finder", desc: "Show file in Finder", key: $hkFinderKey, mod: $hkFinderModifiers)
+                    shortcutRow(title: "Library", desc: "Browse all folders", key: $hkLibraryKey, mod: $hkLibraryModifiers)
+                    
+                    Divider().padding(.horizontal, 40)
+                    
+                    // Preview panel hints
+                    Text("In Preview panel (hover to open)").font(.caption2).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 40)
+                    
+                    HStack(spacing: 8) {
+                        Text("⇧+Click").font(.system(size: 11, weight: .medium, design: .monospaced)).padding(4).background(Color.secondary.opacity(0.15)).cornerRadius(4)
+                        Text("Toggle select files").font(.caption).foregroundColor(.secondary)
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 40)
+                    
+                    HStack(spacing: 8) {
+                        Text("⌘+Click").font(.system(size: 11, weight: .medium, design: .monospaced)).padding(4).background(Color.secondary.opacity(0.15)).cornerRadius(4)
+                        Text("Select single file").font(.caption).foregroundColor(.secondary)
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 40)
+                    
+                    HStack(spacing: 8) {
+                        Text("⌥+Click").font(.system(size: 11, weight: .medium, design: .monospaced)).padding(4).background(Color.secondary.opacity(0.15)).cornerRadius(4)
+                        Text("Paste plain text").font(.caption).foregroundColor(.secondary)
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 40)
                 }
-                
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Quick Delete").fontWeight(.medium)
-                        Text("Delete the currently hovered item.").font(.caption).foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    ShortcutRecorder(actionName: "Quick Delete", keyString: $hkDeleteKey, modifiers: $hkDeleteModifiers, onValidate: { _,_,_ in nil })
-                        .scaleEffect(0.9)
-                }
-                
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Create Folder").fontWeight(.medium)
-                        Text("Move the hovered item to a new folder.").font(.caption).foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    ShortcutRecorder(actionName: "Create Folder", keyString: $hkFolderKey, modifiers: $hkFolderModifiers, onValidate: { _,_,_ in nil })
-                        .scaleEffect(0.9)
-                }
-                
-                Divider()
-                
-                Toggle("Launch at Login", isOn: $launchAtLogin)
-                    .toggleStyle(SwitchToggleStyle(tint: .blue))
-                    .onChange(of: launchAtLogin) { _, newValue in
-                        UserDefaults.standard.set(newValue, forKey: "launchAtLoginEnabled")
-                        if #available(macOS 13.0, *) {
-                            if newValue { try? SMAppService.mainApp.register() }
-                            else { try? SMAppService.mainApp.unregister() }
-                        } else {
-                            SMLoginItemSetEnabled("com.sky.skypaste" as CFString, newValue)
-                        }
-                    }
+                .padding(.vertical, 4)
             }
-            .padding(.horizontal, 40)
             
             Spacer()
             
+            Toggle("Launch at Login", isOn: $launchAtLogin)
+                .toggleStyle(SwitchToggleStyle(tint: .blue))
+                .onChange(of: launchAtLogin) { _, newValue in
+                    UserDefaults.standard.set(newValue, forKey: "launchAtLoginEnabled")
+                    if #available(macOS 13.0, *) {
+                        if newValue {
+                            SMAppService.mainApp.registerSafe()
+                        } else {
+                            SMAppService.mainApp.unregisterSafe()
+                        }
+                    } else {
+                        SMLoginItemSetEnabled("com.sky.skypaste" as CFString, newValue)
+                    }
+                }
+                .padding(.horizontal, 40)
+            
             Button(action: {
                 UserDefaults.standard.set(true, forKey: "hasDismissedWelcome")
-                HotkeyManager.shared.start() // Register new shortcuts
+                HotkeyManager.shared.start()
                 onContinue()
             }) {
                 Text("Start Using SkyPaste")
@@ -240,8 +263,21 @@ struct WelcomeView: View {
             .tint(.green)
             .controlSize(.large)
             .padding(.horizontal, 40)
-            .padding(.bottom, 30)
+            .padding(.bottom, 24)
         }
+    }
+    
+    private func shortcutRow(title: String, desc: String, key: Binding<String>, mod: Binding<Int>) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).fontWeight(.medium).font(.system(size: 13))
+                Text(desc).font(.caption).foregroundColor(.secondary)
+            }
+            Spacer()
+            ShortcutRecorder(actionName: title, keyString: key, modifiers: mod, onValidate: { _,_,_ in nil })
+                .scaleEffect(0.85)
+        }
+        .padding(.horizontal, 40)
     }
     
     private func requestPermissions() {

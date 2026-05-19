@@ -1,7 +1,6 @@
 import SwiftUI
 import AppKit
 import UserNotifications
-import ServiceManagement
 
 struct AboutTabView: View {
     private var appIcon: NSImage {
@@ -12,9 +11,6 @@ struct AboutTabView: View {
         return NSImage(named: NSImage.applicationIconName) ?? NSImage()
     }
     
-    @State private var showUninstallConfirm = false
-    @State private var uninstallCountdown = 5
-    @State private var uninstallTimer: Timer?
     @StateObject private var updateChecker = UpdateChecker.shared
     
     @AppStorage("updateCheckFrequency") private var updateCheckFrequencyRaw: String = UpdateCheckFrequency.daily.rawValue
@@ -128,118 +124,8 @@ struct AboutTabView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             
-            Divider()
-            
-            VStack(spacing: 8) {
-                Text("Uninstaller")
-                    .font(.headline)
-                
-                Button("Uninstall SkyPaste & Reset Everything", role: .destructive) {
-                    showUninstallConfirm = true
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
-                
-                Text("Resets all permissions, removes login item + every file/folder. Fresh install experience on next launch.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 320)
-            }
-            
             Spacer()
         }
         .padding()
-        .sheet(isPresented: $showUninstallConfirm) {
-            VStack(spacing: 16) {
-                Text("Uninstall SkyPaste?")
-                    .font(.headline)
-                
-                Text("This will permanently delete all clipboard history, custom folders, shortcuts, reset permissions, remove login item, and erase all app files. This cannot be undone.")
-                    .font(.caption)
-                    .multilineTextAlignment(.center)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: 280)
-                
-                if uninstallCountdown > 0 {
-                    Text("You can confirm in \(uninstallCountdown)s")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .foregroundColor(.secondary)
-                        .monospacedDigit()
-                } else {
-                    Text("You can now confirm uninstall")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .foregroundColor(.green)
-                }
-                
-                HStack(spacing: 12) {
-                    Button("Cancel") {
-                        uninstallTimer?.invalidate()
-                        showUninstallConfirm = false
-                    }
-                    
-                    Button("Uninstall", role: .destructive) {
-                        performUninstall()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
-                    .disabled(uninstallCountdown > 0)
-                }
-            }
-            .padding(20)
-            .frame(width: 340)
-            .onAppear {
-                uninstallCountdown = 5
-                uninstallTimer?.invalidate()
-                uninstallTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
-                    if uninstallCountdown > 0 {
-                        uninstallCountdown -= 1
-                    } else {
-                        timer.invalidate()
-                    }
-                }
-            }
-        }
-    }
-    
-    private func performUninstall() {
-        let appPath = Bundle.main.bundlePath
-        let bundleID = "com.sky.skypaste"
-        
-        try? SMAppService.mainApp.unregister()
-        
-        let script = """
-        sleep 3
-        /usr/bin/tccutil reset All \(bundleID) 2>/dev/null || true
-        /usr/bin/tccutil reset Accessibility \(bundleID) 2>/dev/null || true
-        /usr/bin/tccutil reset Notifications \(bundleID) 2>/dev/null || true
-        /usr/bin/tccutil reset SystemPolicyAllFiles \(bundleID) 2>/dev/null || true
-        sqlite3 ~/Library/Application\\ Support/com.apple.TCC/TCC.db "DELETE FROM access WHERE client LIKE '%sky%' OR client LIKE '%skypaste%' OR client LIKE '%\(bundleID)%';" 2>/dev/null || true
-        sqlite3 /Library/Application\\ Support/com.apple.TCC/TCC.db "DELETE FROM access WHERE client LIKE '%sky%' OR client LIKE '%skypaste%' OR client LIKE '%\(bundleID)%';" 2>/dev/null || true
-        rm -f /Library/Application\\ Support/com.apple.TCC/AdhocSignatureCache/* 2>/dev/null || true
-        rm -f ~/Library/Application\\ Support/com.apple.TCC/AdhocSignatureCache/* 2>/dev/null || true
-        killall -HUP cfprefsd 2>/dev/null || true
-        rm -rf ~/Library/Application\\ Support/SkyPaste ~/Library/Application\\ Support/com.sky* 2>/dev/null || true
-        rm -rf ~/Library/Caches/SkyPaste ~/Library/Caches/com.sky* 2>/dev/null || true
-        rm -rf ~/Library/Logs/SkyPaste ~/Library/Logs/com.sky* 2>/dev/null || true
-        rm -rf ~/.SkyPaste 2>/dev/null || true
-        rm -rf ~/Library/Preferences/com.sky* ~/Library/Preferences/com.sky.skypaste* ~/Library/Preferences/\(bundleID)* 2>/dev/null || true
-        rm -rf ~/Library/Containers/com.sky* ~/Library/Containers/\(bundleID)* 2>/dev/null || true
-        rm -f ~/Library/LaunchAgents/\(bundleID)*.plist /Library/LaunchAgents/\(bundleID)*.plist 2>/dev/null || true
-        /usr/bin/defaults delete \(bundleID) 2>/dev/null || true
-        /bin/launchctl remove \(bundleID) 2>/dev/null || true
-        sleep 2
-        /bin/rm -rf "\(appPath)"
-        """
-        
-        let process = Process()
-        process.launchPath = "/bin/bash"
-        process.arguments = ["-c", script]
-        try? process.run()
-        
-        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
-        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
-        
-        exit(0)
     }
 }

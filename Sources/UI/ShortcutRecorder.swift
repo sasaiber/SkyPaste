@@ -5,6 +5,8 @@ struct ShortcutRecorder: View {
     @Binding var keyString: String
     @Binding var modifiers: Int
     var onValidate: ((String, Int, String) -> String?)? = nil
+    var width: CGFloat = 100
+    var isMinimalist: Bool = false
     
     @State private var isRecording = false
     @State private var monitor: Any?
@@ -12,20 +14,45 @@ struct ShortcutRecorder: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Button(action: {
-                isRecording.toggle()
-                if isRecording { 
-                    self.errorMessage = nil
-                    startRecording() 
-                } else { stopRecording() }
-            }) {
-                Text(isRecording ? "Listening..." : formatShortcut())
-                    .frame(width: 100)
-                    .padding(.vertical, 4)
+            if isMinimalist {
+                Button(action: {
+                    isRecording.toggle()
+                    if isRecording { 
+                        self.errorMessage = nil
+                        startRecording() 
+                    } else { stopRecording() }
+                }) {
+                    Text(isRecording ? "Listening..." : formatShortcut())
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(isRecording ? .accentColor : (errorMessage != nil ? .red : .primary))
+                        .frame(width: width)
+                        .padding(.vertical, 3)
+                        .background(Color.secondary.opacity(0.08))
+                        .cornerRadius(4)
+                }
+                .buttonStyle(.plain)
+                .controlSize(.small)
+                .tint(isRecording ? .accentColor : (errorMessage != nil ? .red : .secondary))
+                .onDisappear { stopRecording() }
+            } else {
+                Button(action: {
+                    isRecording.toggle()
+                    if isRecording { 
+                        self.errorMessage = nil
+                        startRecording() 
+                    } else { stopRecording() }
+                }) {
+                    Text(isRecording ? "Listening..." : formatShortcut())
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(isRecording ? .accentColor : (errorMessage != nil ? .red : .primary))
+                        .frame(width: width)
+                        .padding(.vertical, 1)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .tint(isRecording ? .accentColor : (errorMessage != nil ? .red : .secondary))
+                .onDisappear { stopRecording() }
             }
-            .buttonStyle(.bordered)
-            .tint(isRecording ? .accentColor : (errorMessage != nil ? .red : .secondary))
-            .onDisappear { stopRecording() }
             
             if let err = errorMessage {
                 Text(err)
@@ -78,7 +105,7 @@ struct ShortcutRecorder: View {
     
     private func startRecording() {
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            let flags = event.modifierFlags.intersection([.command, .option, .shift, .control])
             
             guard let char = keyCodeToString[event.keyCode] else { return event }
             

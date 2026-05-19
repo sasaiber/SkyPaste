@@ -21,6 +21,8 @@ struct AppFolder: Identifiable, Codable, Hashable {
     var icon: String = "folder"
     var emoji: String? = "📁"
     var colorHex: String?
+    var order: Int = 0
+    var appBundleIDs: [String] = []
     
     var displayEmoji: String {
         emoji ?? "📁"
@@ -31,6 +33,13 @@ struct AppFolder: Identifiable, Codable, Hashable {
             return c
         }
         return .accentColor
+    }
+    
+    var appName: String? {
+        guard let bundleID = appBundleIDs.first,
+              let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
+        let path = url.deletingLastPathComponent().lastPathComponent
+        return path.hasSuffix(".app") ? String(path.dropLast(4)) : url.lastPathComponent
     }
 }
 
@@ -58,6 +67,13 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
     var appSource: String? // "Safari", "Xcode" (requires Accessibility)
     var appBundleID: String? // e.g. "com.apple.Safari"
     var copyCount: Int? = 1
+    
+    // Media handling metadata
+    var extensions: [String]?
+    var fileCount: Int?
+    var totalSizeBytes: Int64?
+    var thumbPath: String?
+    var thumbStatus: String?
 }
 
 extension Color {

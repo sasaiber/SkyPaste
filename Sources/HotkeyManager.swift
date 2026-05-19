@@ -4,7 +4,7 @@ import os
 
 class WindowManager {
     static let shared = WindowManager()
-    private var panel: FloatingPanel?
+    var panel: FloatingPanel?
     
     func show(contentView: NSView, size: NSSize, at position: String = "cursor", button: NSStatusBarButton? = nil) {
         if panel == nil {
@@ -18,8 +18,16 @@ class WindowManager {
         } else {
             panel?.contentView = contentView
             if let p = panel {
-                let origin = p.computeOrigin(size: size, position: position, button: button)
-                p.setFrameOrigin(origin)
+                p.position = position
+                p.statusBarButton = button
+                let origin: NSPoint
+                if p.isPresented {
+                    origin = p.computeResizedOrigin(newSize: size)
+                } else {
+                    origin = p.computeOrigin(size: size, position: position, button: button)
+                    p.saveInitialAnchors(origin: origin, size: size)
+                }
+                p.setFrame(NSRect(origin: origin, size: size), display: true)
             }
         }
         
@@ -28,8 +36,8 @@ class WindowManager {
         panel.orderFrontRegardless()
         panel.makeKey()
         panel.isPresented = true
-        
         NSApp.activate(ignoringOtherApps: true)
+        NotificationCenter.default.post(name: NSNotification.Name("SkyPasteWindowDidShow"), object: nil)
     }
     
     func close() {
@@ -40,16 +48,42 @@ class WindowManager {
     var isWindowVisible: Bool {
         panel?.isPresented ?? false
     }
+    
+    func contains(_ point: NSPoint) -> Bool {
+        return panel?.frame.contains(point) ?? false
+    }
 }
 
 // MARK: - FloatingPanel (Maccy-style)
 class FloatingPanel: NSPanel, NSWindowDelegate {
+    enum VerticalAnchor {
+        case top
+        case bottom
+        case center
+    }
+    
     var isPresented: Bool = false
-    private var statusBarButton: NSStatusBarButton?
+    var position: String
+    var statusBarButton: NSStatusBarButton?
+    var anchorPoint: NSPoint?
+    var verticalAnchor: VerticalAnchor = .top
+    var initialTopY: CGFloat? = nil
+    var initialBottomY: CGFloat? = nil
+    var initialCenterY: CGFloat? = nil
     private let onClose: () -> Void
     
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+    
+    func saveInitialAnchors(origin: NSPoint, size: NSSize) {
+        if verticalAnchor == .top {
+            initialTopY = origin.y + size.height
+        } else if verticalAnchor == .bottom {
+            initialBottomY = origin.y
+        } else if verticalAnchor == .center {
+            initialCenterY = origin.y + size.height / 2
+        }
+    }
     
     init(
         contentRect: NSRect,
@@ -58,11 +92,12 @@ class FloatingPanel: NSPanel, NSWindowDelegate {
         position: String
     ) {
         self.statusBarButton = statusBarButton
+        self.position = position
         self.onClose = {}
         
         super.init(
             contentRect: contentRect,
-            styleMask: [.nonactivatingPanel, .borderless, .resizable],
+            styleMask: [.nonactivatingPanel, .borderless],
             backing: .buffered,
             defer: false
         )
@@ -72,7 +107,7 @@ class FloatingPanel: NSPanel, NSWindowDelegate {
         isReleasedWhenClosed = false
         animationBehavior = .none
         isFloatingPanel = true
-        level = .statusBar
+        level = .floating
         collectionBehavior = [.auxiliary, .stationary, .moveToActiveSpace, .fullScreenAuxiliary]
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
@@ -90,12 +125,14 @@ class FloatingPanel: NSPanel, NSWindowDelegate {
         
         // Position
         let origin = computeOrigin(size: contentRect.size, position: position, button: statusBarButton)
+        saveInitialAnchors(origin: origin, size: contentRect.size)
         setFrameOrigin(origin)
     }
     
     func computeOrigin(size: NSSize, position: String, button: NSStatusBarButton?) -> NSPoint {
         switch position {
         case "statusItem":
+            verticalAnchor = .top
             if let button = button, let window = button.window {
                 let rectInWindow = button.convert(button.bounds, to: nil)
                 let screenRect = window.convertToScreen(rectInWindow)
@@ -103,9 +140,19 @@ class FloatingPanel: NSPanel, NSWindowDelegate {
                 // If the screenRect is completely broken (e.g. 0,0), fallback
                 if screenRect.minY > 0 {
                     let originX = screenRect.midX - (size.width / 2)
-                    var origin = NSPoint(x: originX, y: screenRect.minY - size.height - 5)
+                    let screen = NSScreen.screens.first(where: { $0.frame.contains(screenRect.origin) }) ?? NSScreen.main ?? NSScreen.screens.first
                     
-                    if let screen = NSScreen.screens.first(where: { $0.frame.contains(screenRect.origin) }) ?? NSScreen.main {
+                    // Align strictly below the status bar button bottom
+                    var origin = NSPoint(x: originX, y: screenRect.minY - size.height - 1)
+                    
+                    if let screen = screen {
+                        // Clamp window top so it is strictly below the menu bar bottom (visibleFrame.maxY)
+                        let maxTop = screen.visibleFrame.maxY
+                        if origin.y + size.height > maxTop {
+                            origin.y = maxTop - size.height
+                            verticalAnchor = .top
+                        }
+                        
                         if origin.x + size.width > screen.visibleFrame.maxX {
                             origin.x = screen.visibleFrame.maxX - size.width
                         } else if origin.x < screen.visibleFrame.minX {
@@ -117,6 +164,7 @@ class FloatingPanel: NSPanel, NSWindowDelegate {
             }
             fallthrough
         case "center":
+            verticalAnchor = .center
             if let screen = NSScreen.main ?? NSScreen.screens.first {
                 let frame = screen.visibleFrame
                 let x = frame.midX - size.width / 2
@@ -125,40 +173,108 @@ class FloatingPanel: NSPanel, NSWindowDelegate {
             }
             fallthrough
         default:
-            var point = NSEvent.mouseLocation
+            let mouseLocation: NSPoint
+            if let savedAnchor = anchorPoint {
+                mouseLocation = savedAnchor
+            } else {
+                mouseLocation = NSEvent.mouseLocation
+                anchorPoint = mouseLocation
+            }
+            var point = mouseLocation
             point.x += 10
-            point.y -= (size.height + 10)
             
-            if let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? NSScreen.main {
+            if let screen = NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) }) ?? NSScreen.main {
+                // Determine whether to place the window above or below the cursor.
+                // We prefer below the cursor, but if there isn't enough space, we place it above.
+                let spaceBelow = mouseLocation.y - screen.visibleFrame.minY
+                if spaceBelow < size.height + 10 {
+                    // Place it above the cursor (with 15 points spacing to clear the cursor itself)
+                    point.y = mouseLocation.y + 15
+                    verticalAnchor = .bottom
+                } else {
+                    // Place it below the cursor
+                    point.y = mouseLocation.y - size.height - 10
+                    verticalAnchor = .top
+                }
+                
+                // Clamp X to visible screen bounds
                 if point.x + size.width > screen.visibleFrame.maxX {
                     point.x = screen.visibleFrame.maxX - size.width
                 }
                 if point.x < screen.visibleFrame.minX {
                     point.x = screen.visibleFrame.minX
                 }
+                
+                // Clamp Y to visible screen bounds
                 if point.y < screen.visibleFrame.minY {
                     point.y = screen.visibleFrame.minY
+                    verticalAnchor = .bottom // Resting on bottom edge, so anchor bottom
                 }
                 if point.y + size.height > screen.visibleFrame.maxY {
                     point.y = screen.visibleFrame.maxY - size.height
+                    verticalAnchor = .top // Resting on top edge, so anchor top
                 }
+            } else {
+                // Fallback in case screen is nil
+                point.y -= (size.height + 10)
+                verticalAnchor = .top
             }
             return point
         }
     }
     
-    func verticallyResize(to newHeight: CGFloat) {
+    func computeResizedOrigin(newSize: NSSize) -> NSPoint {
+        var newOrigin = self.frame.origin
+        
+        if position == "center" {
+            if let centerY = initialCenterY {
+                newOrigin.y = centerY - newSize.height / 2
+            } else {
+                newOrigin.y = self.frame.midY - newSize.height / 2
+            }
+            newOrigin.x = self.frame.midX - newSize.width / 2
+            return newOrigin
+        }
+        
+        switch verticalAnchor {
+        case .top:
+            if let topY = initialTopY {
+                newOrigin.y = topY - newSize.height
+            } else {
+                newOrigin.y = self.frame.maxY - newSize.height
+            }
+        case .bottom:
+            if let bottomY = initialBottomY {
+                newOrigin.y = bottomY
+            }
+        case .center:
+            if let centerY = initialCenterY {
+                newOrigin.y = centerY - newSize.height / 2
+            } else {
+                newOrigin.y = self.frame.midY - newSize.height / 2
+            }
+        }
+        
+        return newOrigin
+    }
+    
+    func verticallyResize(to newHeight: CGFloat, animate: Bool = true) {
         var newSize = frame.size
         newSize.height = newHeight
         
-        var newOrigin = frame.origin
-        newOrigin.y += (frame.height - newSize.height)
+        let newOrigin = computeResizedOrigin(newSize: newSize)
+        let targetFrame = NSRect(origin: newOrigin, size: newSize)
         
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.2
-            animator().setFrame(NSRect(origin: newOrigin, size: newSize), display: true)
+        if animate {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.2
+                animator().setFrame(targetFrame, display: true)
+            }
+        } else {
+            setFrame(targetFrame, display: true)
         }
     }
+
     
     override func resignKey() {
         super.resignKey()
@@ -168,8 +284,16 @@ class FloatingPanel: NSPanel, NSWindowDelegate {
     override func close() {
         super.close()
         isPresented = false
+        anchorPoint = nil
+        initialTopY = nil
+        initialBottomY = nil
+        initialCenterY = nil
         statusBarButton?.isHighlighted = false
         onClose()
+    }
+    
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        return frameRect
     }
 }
 
@@ -269,6 +393,7 @@ class HotkeyManager {
     static let shared = HotkeyManager()
     var onToggleRequested: (() -> Void)?
     var onPastePlainRequested: (() -> Void)?
+    var onLibraryRequested: (() -> Void)?
     var onFolderShortcutRequested: ((UUID) -> Void)?
     var onFolderMoveRequested: ((UUID) -> Void)?
     
@@ -309,6 +434,17 @@ class HotkeyManager {
         let flags2 = NSEvent.ModifierFlags(rawValue: UInt(hk2Modifiers))
         registerCarbonHotKey(key: hk2Key, modifiers: flags2) { [weak self] in
             self?.onPastePlainRequested?()
+        }
+        
+        // --- Hotkey 3: Library ---
+        let hkLibKey = (defaults.string(forKey: "hkLibraryKey") ?? "a").lowercased()
+        var hkLibModifiers = defaults.integer(forKey: "hkLibraryModifiers")
+        if hkLibModifiers == 0 {
+            hkLibModifiers = Int(NSEvent.ModifierFlags.option.rawValue)
+        }
+        let flagsLib = NSEvent.ModifierFlags(rawValue: UInt(hkLibModifiers))
+        registerCarbonHotKey(key: hkLibKey, modifiers: flagsLib) { [weak self] in
+            self?.onLibraryRequested?()
         }
         
         // --- Folder Open Shortcuts ---

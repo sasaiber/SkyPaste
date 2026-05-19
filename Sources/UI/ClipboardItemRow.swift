@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 
 struct ClipboardItemRow: View {
+    @ObservedObject var storage: Storage
     let item: ClipboardItem
     let folders: [AppFolder]
     let hoveredItemID: UUID?
@@ -11,19 +12,33 @@ struct ClipboardItemRow: View {
     var onPin: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
     var onAssignToFolder: ((UUID?) -> Void)? = nil
+    var onImageTap: ((URL) -> Void)? = nil
+    var onExtractFile: (([URL], Bool, UUID?) -> Void)? = nil
+    var onCreateFolder: (([URL]?) -> Void)? = nil
+    var onDeleteFiles: (([URL]) -> Void)? = nil
     
     @State private var showFullText: Bool = false
     @State private var isPopoverHovered: Bool = false
     @State private var hideTask: DispatchWorkItem? = nil
+    @State private var loadedThumbnails: [URL: NSImage] = [:]
+    
+    @State private var selectedURLs: Set<URL> = []
+    @State private var innerHoveredURL: URL? = nil
     
     @AppStorage("hkPinKey") private var hkPinKey: String = "p"
     @AppStorage("hkPinModifiers") private var hkPinModifiers: Int = Int(NSEvent.ModifierFlags.command.rawValue)
     
-    @AppStorage("hkDeleteKey") private var hkDeleteKey: String = "d"
+    @AppStorage("hkDeleteKey") private var hkDeleteKey: String = "delete"
     @AppStorage("hkDeleteModifiers") private var hkDeleteModifiers: Int = Int(NSEvent.ModifierFlags.command.rawValue)
+    
+    @AppStorage("hkFinderKey") private var hkFinderKey: String = "f"
+    @AppStorage("hkFinderModifiers") private var hkFinderModifiers: Int = Int(NSEvent.ModifierFlags.command.rawValue | NSEvent.ModifierFlags.shift.rawValue)
     
     @AppStorage("previewDelay") private var previewDelay: Double = 200
     @AppStorage("showSpecialSymbols") private var showSpecialSymbols: Bool = true
+    @AppStorage("disableMediaPreviews") private var disableMediaPreviews: Bool = false
+    @AppStorage("unlimitedMediaPreviews") private var unlimitedMediaPreviews: Bool = true
+    @AppStorage("maxPreviewsLimit") private var maxPreviewsLimit: Int = 10
     
 
     
@@ -54,127 +69,32 @@ struct ClipboardItemRow: View {
             
             // 2. Main Content
             VStack(alignment: .leading, spacing: 2) {
-                // Handle images (single or multiple)
-                if item.type == .image, let content = item.textContent {
-                    let imageURLs = content.components(separatedBy: "\n")
-                        .filter { !$0.isEmpty }
-                        .compactMap { urlString -> URL? in
-                            if let url = URL(string: urlString) {
-                                // Convert file:// URL to proper path
-                                if url.scheme == "file" {
-                                    return url
-                                }
-                            }
-                            // Fallback: try as file path
-                            return URL(fileURLWithPath: urlString)
-                        }
-                    
-                    if imageURLs.count > 0 {
-                        if let title = item.title {
-                            Text(title)
-                                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                                .lineLimit(1)
-                                .foregroundColor(.accentColor)
-                        }
-                        
-                        // Show file paths
-                        if imageURLs.count == 1 {
-                            Text(imageURLs[0].path)
-                                .font(.system(size: 9, design: .monospaced))
-                                .lineLimit(1)
-                                .foregroundColor(.secondary)
-                                .truncationMode(.middle)
-                        } else {
-                            Text(imageURLs.map { $0.lastPathComponent }.joined(separator: ", "))
-                                .font(.system(size: 9, design: .monospaced))
-                                .lineLimit(1)
-                                .foregroundColor(.secondary)
-                                .truncationMode(.tail)
-                        }
-                        
-                        // Show first thumbnail only
-                        if let firstURL = imageURLs.first {
-                            Group {
-                                 if let thumb = ImageCache.shared.image(for: firstURL) {
-                                     Image(nsImage: thumb)
-                                         .resizable()
-                                         .scaledToFill()
-                                         .frame(width: 48, height: 48)
-                                         .cornerRadius(6)
-                                         .clipped()
-                                         .background(Color.gray.opacity(0.2))
-                                 } else {
-                                     Rectangle().fill(Color.gray.opacity(0.2)).frame(width: 48, height: 48).cornerRadius(6)
-                                 }
-                            }
-                             .onAppear {
-                                 if ImageCache.shared.image(for: firstURL) == nil {
-                                     ImageCache.shared.asyncThumbnail(url: firstURL) { _ in }
-                                 }
-                             }
-                        }
-                    }
-                } else if item.type == .image || (item.type == .file && isImageURL(item.fileURL)), 
-                   let url = item.fileURL {
-                    
-                    Group {
-                         if let thumb = ImageCache.shared.image(for: url) {
-                             Image(nsImage: thumb)
-                                 .resizable()
-                                 .scaledToFill()
-                                 .frame(width: 36, height: 36)
-                                 .cornerRadius(6)
-                                .clipped()
-                        } else {
-                            Rectangle().fill(Color.gray.opacity(0.2)).frame(width: 36, height: 36).cornerRadius(6)
-                        }
-                    }
-                     .onAppear {
-                         if ImageCache.shared.image(for: url) == nil {
-                             ImageCache.shared.asyncThumbnail(url: url) { _ in }
-                         }
-                     }
-                    
-                    if item.type == .file {
-                        Text(url.path)
-                            .font(.system(size: 9, design: .monospaced))
-                            .lineLimit(1)
-                            .foregroundColor(.secondary)
-                            .truncationMode(.middle)
-                    }
-                    
-                } else if item.type == .file {
-                    // Show "N files" title if multiple files
-                    if let title = item.title, title.hasSuffix("files") {
+                if item.type == .image || item.type == .file {
+                    let urls = extractURLs(from: item)
+                    if let title = item.title {
                         Text(title)
                             .font(.system(size: 12, weight: .semibold, design: .rounded))
                             .lineLimit(1)
                             .foregroundColor(.accentColor)
-                        
-                        // Show first few file names
-                        if let content = item.textContent {
-                            let files = content.components(separatedBy: "\n")
-                                .compactMap { URL(string: $0)?.lastPathComponent }
-                                .prefix(3)
-                            
-                            Text(files.joined(separator: ", ") + (files.count < content.components(separatedBy: "\n").count ? ", ..." : ""))
-                                .font(.system(size: 9, design: .monospaced))
-                                .lineLimit(1)
-                                .foregroundColor(.secondary)
-                                .truncationMode(.tail)
-                        }
-                    } else {
-                        // Single file
-                        Text(item.fileURL?.lastPathComponent ?? "Unknown File")
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                    }
+                    
+                    if urls.count == 1 {
+                        Text(urls[0].path)
+                            .font(.system(size: 9, design: .monospaced))
                             .lineLimit(1)
-                        if let fileURL = item.fileURL {
-                            Text(fileURL.path)
-                                .font(.system(size: 9, design: .monospaced))
-                                .lineLimit(1)
-                                .foregroundColor(.secondary)
-                                .truncationMode(.middle)
-                        }
+                            .foregroundColor(.secondary)
+                            .truncationMode(.middle)
+                    } else if !urls.isEmpty {
+                        Text(urls.map { $0.lastPathComponent }.joined(separator: ", "))
+                            .font(.system(size: 9, design: .monospaced))
+                            .lineLimit(1)
+                            .foregroundColor(.secondary)
+                            .truncationMode(.tail)
+                    }
+                    
+                    // Render Thumbnails
+                    if !urls.isEmpty {
+                        renderThumbnails(urls: urls, count: item.fileCount ?? urls.count)
                     }
                 } else {
                     let text = item.textContent ?? "Empty"
@@ -241,6 +161,7 @@ struct ClipboardItemRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
+        .contentShape(Rectangle())
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(isHovered ? Color.primary.opacity(0.06) : (item.isPinned ? Color.accentColor.opacity(0.05) : Color.clear))
@@ -250,10 +171,26 @@ struct ClipboardItemRow: View {
             popoverContent(for: item)
                 .onHover { popoverHovered in
                     self.isPopoverHovered = popoverHovered
-                    if !popoverHovered && !self.isHovered {
+                    if popoverHovered {
+                        storage.hoveredItemID = item.id
+                    } else if !self.isHovered {
                         self.showFullText = false
                     }
                 }
+                .onDisappear {
+                    selectedURLs.removeAll()
+                    innerHoveredURL = nil
+                    storage.popoverSelectedURLs.removeAll()
+                    storage.popoverHoveredURL = nil
+                }
+        }
+        .onChange(of: showFullText) { _, isShown in
+            if !isShown {
+                selectedURLs.removeAll()
+                innerHoveredURL = nil
+                storage.popoverSelectedURLs.removeAll()
+                storage.popoverHoveredURL = nil
+            }
         }
         .onChange(of: hoveredItemID) { _, newHoveredID in
             hideTask?.cancel()
@@ -326,9 +263,11 @@ struct ClipboardItemRow: View {
             HStack(spacing: 12) {
                 Text("\(formatShortcut(key: hkPinKey, modifiers: hkPinModifiers)) to \(item.isPinned ? "Unpin" : "Pin")")
                 Text("\(formatShortcut(key: hkDeleteKey, modifiers: hkDeleteModifiers)) to Delete")
+                Text("\(formatShortcut(key: hkFinderKey, modifiers: hkFinderModifiers)) to View in Finder")
                 Text("Click to Paste")
                 Text("⌥+Click to Paste Plain")
-                Text("⌘+Click to Copy Only")
+                Text("⇧+Click to Toggle Select")
+                Text("⌘+Click to Select Single")
             }
             .font(.system(size: 9, weight: .medium, design: .rounded))
             .foregroundColor(.secondary)
@@ -338,20 +277,10 @@ struct ClipboardItemRow: View {
             Divider()
             
             // Content
-            if item.type == .image, let content = item.textContent {
-                // Parse image URLs properly
-                let imageURLs = content.components(separatedBy: "\n")
-                    .filter { !$0.isEmpty }
-                    .compactMap { urlString -> URL? in
-                        if let url = URL(string: urlString) {
-                            if url.scheme == "file" {
-                                return url
-                            }
-                        }
-                        return URL(fileURLWithPath: urlString)
-                    }
+            if item.type == .image || item.type == .file {
+                let urls = extractURLs(from: item)
                 
-                if !imageURLs.isEmpty {
+                if !urls.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         if let title = item.title {
                             Text(title)
@@ -359,177 +288,190 @@ struct ClipboardItemRow: View {
                                 .foregroundColor(.accentColor)
                                 .padding(.horizontal)
                         }
-                        
-                        // Vertical scroll with one image per view (large preview)
+                        Divider()
                         ScrollView(.vertical, showsIndicators: true) {
-                            VStack(spacing: 16) {
-                                ForEach(Array(imageURLs.enumerated()), id: \.offset) { index, url in
-                                    VStack(spacing: 8) {
-                                        if let nsImage = NSImage(contentsOf: url) {
-                                            Image(nsImage: nsImage)
-                                                .resizable()
-                                                .scaledToFit()
-                                                .frame(maxWidth: 420, maxHeight: 350)
-                                                .cornerRadius(8)
-                                                .shadow(radius: 2)
-                                        } else {
-                                            // Fallback if image fails to load
-                                            VStack {
-                                                Image(systemName: "photo.fill")
-                                                    .font(.system(size: 48))
-                                                    .foregroundColor(.secondary)
-                                                Text("Failed to load image")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                                Text(url.path)
-                                                    .font(.system(size: 9, design: .monospaced))
-                                                    .foregroundColor(.secondary)
-                                                    .lineLimit(2)
-                                            }
-                                            .frame(maxWidth: 420, maxHeight: 200)
-                                            .background(Color.gray.opacity(0.1))
-                                            .cornerRadius(8)
-                                        }
+                            LazyVStack(alignment: .leading, spacing: 6) {
+                                ForEach(Array(urls.enumerated()), id: \.offset) { index, url in
+                                    HStack(spacing: 12) {
+                                        Image(nsImage: getPreviewIcon(for: url, at: index))
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 48, height: 48)
+                                            .cornerRadius(6)
+                                            .clipped()
+                                            .overlay(
+                                                Group {
+                                                    if let icon = getAppIcon(bundleID: item.appBundleID) {
+                                                        Image(nsImage: icon)
+                                                            .resizable()
+                                                            .frame(width: 12, height: 12)
+                                                            .background(Color.white)
+                                                            .clipShape(Circle())
+                                                            .padding(2)
+                                                    }
+                                                }, alignment: .bottomTrailing
+                                            )
                                         
-                                        // Image counter, filename and full path
                                         VStack(alignment: .leading, spacing: 4) {
-                                            HStack {
-                                                Text("\(index + 1) / \(imageURLs.count)")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                                Spacer()
-                                                Text(url.lastPathComponent)
-                                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                                    .foregroundColor(.primary)
-                                                    .lineLimit(1)
-                                            }
+                                            Text(url.lastPathComponent)
+                                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                                .lineLimit(1)
                                             
-                                            // Full path with copy button
                                             HStack(spacing: 4) {
                                                 Text(url.path)
-                                                    .font(.system(size: 9, design: .monospaced))
+                                                    .font(.system(size: 10, design: .monospaced))
                                                     .foregroundColor(.secondary)
-                                                    .textSelection(.enabled)
-                                                    .lineLimit(2)
-                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                                    .truncationMode(.middle)
+                                                    .lineLimit(1)
+                                                
+                                                Spacer(minLength: 10)
                                                 
                                                 Button(action: {
                                                     NSPasteboard.general.clearContents()
-                                                    NSPasteboard.general.setString(url.path, forType: .string)
+                                                    NSPasteboard.general.writeObjects([url as NSURL])
                                                 }) {
-                                                    Image(systemName: "doc.on.doc")
-                                                        .font(.system(size: 10))
+                                                    Image(systemName: "doc.on.clipboard")
+                                                        .font(.system(size: 12))
                                                 }
                                                 .buttonStyle(.plain)
-                                                .foregroundColor(.secondary)
-                                                .help("Copy path")
+                                                .foregroundColor(.accentColor)
+                                                .help("Copy file")
                                             }
                                         }
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.secondary.opacity(0.05))
-                                        .cornerRadius(6)
                                     }
-                                }
-                            }
-                            .padding()
-                        }
-                    }
-                }
-            } else if item.type == .image || (item.type == .file && isImageURL(item.fileURL)), 
-               let url = item.fileURL, let nsImage = NSImage(contentsOf: url) {
-                VStack(spacing: 8) {
-                    Image(nsImage: nsImage)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: 400, maxHeight: 400)
-                    
-                    // Show full path for single image
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(url.lastPathComponent)
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundColor(.primary)
-                        
-                        HStack(spacing: 4) {
-                            Text(url.path)
-                                .font(.system(size: 9, design: .monospaced))
-                                .foregroundColor(.secondary)
-                                .textSelection(.enabled)
-                                .lineLimit(2)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            
-                            Button(action: {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(url.path, forType: .string)
-                            }) {
-                                Image(systemName: "doc.on.doc")
-                                    .font(.system(size: 10))
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundColor(.secondary)
-                            .help("Copy path")
-                        }
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.secondary.opacity(0.05))
-                    .cornerRadius(6)
-                }
-                .padding()
-            } else if item.type == .file {
-                VStack(alignment: .leading, spacing: 8) {
-                    // Check if multiple files
-                    if let title = item.title, title.hasSuffix("files"), let content = item.textContent {
-                        Text(title)
-                            .font(.headline)
-                            .foregroundColor(.accentColor)
-                        
-                        Divider()
-                        
-                        // List all files
-                        let filePaths = content.components(separatedBy: "\n")
-                            .compactMap { URL(string: $0) }
-                        
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 6) {
-                                ForEach(Array(filePaths.enumerated()), id: \.offset) { index, url in
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(url.lastPathComponent)
-                                            .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                            .lineLimit(1)
-                                        Text(url.path)
-                                            .font(.system(size: 9, design: .monospaced))
-                                            .lineLimit(2)
-                                            .foregroundColor(.secondary)
-                                            .truncationMode(.middle)
+                                    .padding(.vertical, 4)
+                                    .padding(.horizontal, 8)
+                                    .background(
+                                        selectedURLs.contains(url) ? Color.accentColor.opacity(0.15) :
+                                        (innerHoveredURL == url ? Color.secondary.opacity(0.1) : Color.clear)
+                                    )
+                                    .cornerRadius(8)
+                                    .contentShape(Rectangle())
+                                    .onHover { h in
+                                        if h { 
+                                            innerHoveredURL = url 
+                                            storage.popoverHoveredURL = url
+                                            if NSEvent.modifierFlags.contains(.shift) {
+                                                if selectedURLs.contains(url) { selectedURLs.remove(url) }
+                                                else { selectedURLs.insert(url) }
+                                                storage.popoverSelectedURLs = Array(selectedURLs)
+                                            }
+                                        }
+                                        else if innerHoveredURL == url { 
+                                            innerHoveredURL = nil 
+                                            if storage.popoverHoveredURL == url { storage.popoverHoveredURL = nil }
+                                        }
                                     }
-                                    if index < filePaths.count - 1 {
+                                    .onTapGesture {
+                                        let flags = NSEvent.modifierFlags
+                                        if flags.contains(.command) {
+                                            if selectedURLs.contains(url) { selectedURLs.remove(url) }
+                                            else { selectedURLs.insert(url) }
+                                        } else if flags.contains(.shift) {
+                                            if selectedURLs.contains(url) { selectedURLs.remove(url) }
+                                            else { selectedURLs.insert(url) }
+                                        } else {
+                                            if isImageURL(url) {
+                                                onImageTap?(url)
+                                            }
+                                            selectedURLs = [url]
+                                        }
+                                        storage.popoverSelectedURLs = Array(selectedURLs)
+                                    }
+                                    .contextMenu {
+                                        let isMulti = selectedURLs.count > 1
+                                        let urlsToActOn = selectedURLs.isEmpty ? [url] : (selectedURLs.contains(url) ? Array(selectedURLs) : [url])
+                                        let isFullSelection = urlsToActOn.count == urls.count
+                                        
+                                        Button(action: {
+                                            let pboard = NSPasteboard.general
+                                            pboard.clearContents()
+                                            pboard.writeObjects(urlsToActOn as [NSURL])
+                                        }) {
+                                            Text(isMulti ? "Copy \(urlsToActOn.count) Files" : "Copy File")
+                                            Image(systemName: "doc.on.clipboard")
+                                        }
+                                        
                                         Divider()
+                                        
+                                        Button(action: { 
+                                            if isFullSelection {
+                                                onPin?()
+                                            } else {
+                                                onExtractFile?(urlsToActOn, true, item.folderID) 
+                                            }
+                                        }) {
+                                            Text(isMulti ? "Pin Selected Files" : "Pin File")
+                                            Image(systemName: "pin")
+                                        }
+                                        
+                                        Menu("Add to Folder") {
+                                            Button(action: { 
+                                                if isFullSelection {
+                                                    onCreateFolder?(nil)
+                                                } else {
+                                                    onCreateFolder?(urlsToActOn) 
+                                                }
+                                            }) {
+                                                Text("Create New Folder...")
+                                                Image(systemName: "folder.badge.plus")
+                                            }
+                                            Divider()
+                                            ForEach(folders) { folder in
+                                                Button(action: { 
+                                                    if isFullSelection {
+                                                        onAssignToFolder?(folder.id)
+                                                    } else {
+                                                        onExtractFile?(urlsToActOn, false, folder.id) 
+                                                    }
+                                                }) {
+                                                    Text("\(folder.displayEmoji) \(folder.name)")
+                                                }
+                                            }
+                                        }
+                                        
+                                        Divider()
+                                        
+                                        Button(action: {
+                                            for u in urlsToActOn {
+                                                NSWorkspace.shared.activateFileViewerSelecting([u])
+                                            }
+                                        }) {
+                                            Text(isMulti ? "Show in Finder (\(urlsToActOn.count))" : "Show in Finder")
+                                            Image(systemName: "magnifyingglass")
+                                        }
+                                        
+                                        Divider()
+                                        
+                                        Button(role: .destructive, action: {
+                                            if isFullSelection {
+                                                onDelete?()
+                                            } else {
+                                                onDeleteFiles?(urlsToActOn)
+                                            }
+                                        }) {
+                                            Text(isMulti ? "Delete Selected Files" : "Delete File")
+                                            Image(systemName: "trash")
+                                        }
+                                    }
+                                    .onDrag {
+                                        let urlsToDrag = selectedURLs.isEmpty ? [url] : (selectedURLs.contains(url) ? Array(selectedURLs) : [url])
+                                        let provider = NSItemProvider(object: urlsToDrag.first! as NSURL)
+                                        return provider
                                     }
                                 }
                             }
-                            .padding(6)
+                            .padding(.horizontal, 6)
+                            .padding(.bottom, 6)
                         }
-                        .frame(maxHeight: 200)
-                        .background(Color.secondary.opacity(0.05))
-                        .cornerRadius(6)
-                    } else {
-                        // Single file
-                        Text(item.fileURL?.lastPathComponent ?? "File")
-                            .font(.headline)
-                        Text(item.fileURL?.path ?? "")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .textSelection(.enabled)
+                        .frame(maxHeight: 400)
                     }
                 }
-                .padding()
             } else {
                 ScrollView {
                     Text(item.textContent ?? "")
                         .font(.system(size: 12, design: .monospaced))
                         .padding()
-                        .textSelection(.enabled)
                 }
             }
         }
@@ -582,32 +524,108 @@ struct ClipboardItemRow: View {
         return nil
     }
     
-
+    private func extractURLs(from item: ClipboardItem) -> [URL] {
+        if let content = item.textContent {
+            return content.components(separatedBy: "\n")
+                .filter { !$0.isEmpty }
+                .compactMap { urlString -> URL? in
+                    if let url = URL(string: urlString) {
+                        if url.scheme == "file" {
+                            return url
+                        }
+                    }
+                    return URL(fileURLWithPath: urlString)
+                }
+        } else if let url = item.fileURL {
+            return [url]
+        }
+        return []
+    }
     
-    private func getThumbnail(url: URL) -> NSImage {
-        // Check cache first
-        if let cached = ImageCache.shared.image(for: url) {
-            return cached
+    private func getIcon(for url: URL) -> NSImage {
+        if !disableMediaPreviews,
+           let thumbURL = ThumbnailGenerator.shared.getExistingThumbnailURL(for: url),
+           let img = NSImage(contentsOf: thumbURL) {
+            return img
         }
-        
-        // Load image from file URL
-        guard let fullImage = NSImage(contentsOf: url) else {
-            return NSImage(systemSymbolName: "photo.fill", accessibilityDescription: nil) ?? NSImage()
+        return NSWorkspace.shared.icon(forFile: url.path)
+    }
+    
+    /// Returns a rich thumbnail for items within the preview limit, plain file icon for the rest.
+    private func getPreviewIcon(for url: URL, at index: Int) -> NSImage {
+        if disableMediaPreviews {
+            return NSWorkspace.shared.icon(forFile: url.path)
         }
-        
-        let thumbSize = NSSize(width: 48, height: 48)
-        let scaledImage = NSImage(size: thumbSize)
-        scaledImage.size = thumbSize
-        
-        scaledImage.lockFocus()
-        NSColor.white.setFill()
-        NSBezierPath(rect: NSRect(origin: .zero, size: thumbSize)).fill()
-        fullImage.draw(in: NSRect(origin: .zero, size: thumbSize))
-        scaledImage.unlockFocus()
-        
-        // Cache it
-        ImageCache.shared.setImage(scaledImage, for: url)
-        
-        return scaledImage
+        let limit = unlimitedMediaPreviews ? Int.max : max(0, maxPreviewsLimit)
+        if index < limit,
+           let thumbURL = ThumbnailGenerator.shared.getExistingThumbnailURL(for: url),
+           let img = NSImage(contentsOf: thumbURL) {
+            return img
+        }
+        return NSWorkspace.shared.icon(forFile: url.path)
+    }
+    
+    @ViewBuilder
+    private func renderThumbnails(urls: [URL], count: Int) -> some View {
+        if disableMediaPreviews {
+            EmptyView()
+        } else if count == 1, let first = urls.first {
+            Image(nsImage: getIcon(for: first))
+                .resizable()
+                .scaledToFill()
+                .frame(width: 48, height: 48)
+                .cornerRadius(6)
+                .clipped()
+        } else if count >= 2 && count <= 9 {
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(24), spacing: 2), count: min(3, count)), spacing: 2) {
+                ForEach(urls.prefix(count), id: \.self) { url in
+                    Image(nsImage: getIcon(for: url))
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 24, height: 24)
+                        .cornerRadius(4)
+                        .clipped()
+                }
+            }
+        } else if count >= 10 && count <= 99 {
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(16), spacing: 2), count: 3), spacing: 2) {
+                ForEach(urls.prefix(9), id: \.self) { url in
+                    Image(nsImage: getIcon(for: url))
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 16, height: 16)
+                        .cornerRadius(2)
+                        .clipped()
+                }
+            }
+            .overlay(
+                Text("+\(count - 9)")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(2)
+                    .background(Color.black.opacity(0.7))
+                    .cornerRadius(4)
+                    .offset(x: 10, y: 10)
+            )
+        } else if count >= 100 {
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(24), spacing: 2), count: 2), spacing: 2) {
+                ForEach(urls.prefix(4), id: \.self) { url in
+                    Image(nsImage: getIcon(for: url))
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 24, height: 24)
+                        .cornerRadius(2)
+                        .clipped()
+                }
+            }
+            .overlay(
+                Text("\(count)")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(4)
+                    .background(Color.black.opacity(0.8))
+                    .cornerRadius(4)
+            )
+        }
     }
 }

@@ -19,6 +19,7 @@ struct SkyPasteApp: App {
     }
 }
 
+@MainActor
 class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     static private(set) var shared: AppDelegate!
     var globalStore: Storage!
@@ -30,7 +31,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     var welcomeWindow: NSWindow?
     var popupHostingView: NSHostingView<MainView>?
     var outsideClickMonitor: Any?
-    var isPickingEmoji = false
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
@@ -96,6 +96,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             }
         }
         
+        HotkeyManager.shared.onLibraryRequested = { [weak self] in
+            guard let self = self else { return }
+            let position = UserDefaults.standard.string(forKey: "popupPosition") ?? "cursor"
+            LibraryWindowManager.shared.toggle(storage: self.globalStore, position: position)
+        }
+        
         HotkeyManager.shared.start()
         
         let monitor = ClipboardMonitor(storage: self.globalStore)
@@ -115,30 +121,30 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             "hkDeleteModifiers": Int(NSEvent.ModifierFlags.command.rawValue),
             "hkFolderKey": "f",
             "hkFolderModifiers": Int(NSEvent.ModifierFlags.command.rawValue),
+            "hkLibraryKey": "a",
+            "hkLibraryModifiers": Int(NSEvent.ModifierFlags.option.rawValue),
         ])
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             if settings.authorizationStatus == .notDetermined {
-                self.requestNotificationPermission()
+                Task { @MainActor in
+                    self.requestNotificationPermission()
+                }
             }
         }
         setupNotificationDelegate()
         
-        // Sync login item using correct API per OS version (fresh 2026 best practice)
-        let wantsLogin = UserDefaults.standard.bool(forKey: "launchAtLoginEnabled")
-        if #available(macOS 13.0, *) {
-            if wantsLogin {
-                try? SMAppService.mainApp.register()
-            }
-        } else {
-            // Legacy path for older macOS (still works)
-            if wantsLogin {
-                SMLoginItemSetEnabled("com.sky.skypaste" as CFString, true)
-            }
-        }
+        // Login item is managed exclusively by the user toggle in Preferences.
+        // Do NOT re-register here — with ad-hoc signing each build has a different
+        // identity, so calling register() again creates a duplicate entry in
+        // System Settings > Login Items.
         
         cleanOrphanedImages()
         
-        if !UserDefaults.standard.bool(forKey: "hasSeenWelcome") {
+        // Fresh-install detection: use a marker file inside the app data directory.
+        // When the user deletes ~/Library/Application Support/SkyPaste/ (e.g. via
+        // AppCleaner, manual rm, or our cleanup script), the marker disappears and
+        // the welcome screen shows again on next launch.
+        if !FileManager.default.fileExists(atPath: Self.setupMarkerURL.path) {
             showWelcomeWindow()
         }
         
@@ -153,7 +159,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         UNUserNotificationCenter.current().delegate = self
     }
     
-    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         completionHandler([.banner, .sound])
     }
     
@@ -219,7 +225,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
     
     @objc func togglePopover(_ sender: AnyObject?) {
-        guard UserDefaults.standard.bool(forKey: "hasSeenWelcome") else {
+        guard FileManager.default.fileExists(atPath: Self.setupMarkerURL.path) else {
             DispatchQueue.main.async { self.showWelcomeWindow() }
             return
         }
@@ -231,15 +237,28 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             if popupHostingView == nil {
                 let mainView = MainView(storage: self.globalStore)
                 let hostingView = NSHostingView(rootView: mainView)
-                hostingView.frame = NSRect(x: 0, y: 0, width: 400, height: 600)
                 self.popupHostingView = hostingView
             }
             
-            let size = NSSize(width: 400, height: 600)
-            let position = UserDefaults.standard.string(forKey: "popupPosition") ?? "cursor"
+            let isMenuClick = sender != nil
+            let position = isMenuClick ? "statusItem" : (UserDefaults.standard.string(forKey: "popupPosition") ?? "cursor")
+            let button = (position == "statusItem" || isMenuClick) ? self.statusBarItem.button : nil
             
-            let button = position == "statusItem" ? self.statusBarItem.button : nil
             if let view = self.popupHostingView {
+                let items = self.globalStore.items
+                let selectedFolderID = self.globalStore.selectedFolderID
+                let filteredCount = items.filter { item in
+                    if let fid = selectedFolderID {
+                        return item.folderID == fid
+                    } else {
+                        return item.folderID == nil
+                    }
+                }.count
+                
+                let estimatedListHeight = filteredCount == 0 ? 100 : CGFloat(filteredCount) * 70 + 16
+                let initialHeight = min(estimatedListHeight + 52, 600)
+                
+                let size = NSSize(width: 400, height: initialHeight)
                 WindowManager.shared.show(contentView: view, size: size, at: position, button: button)
             }
             
@@ -250,15 +269,30 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     
     private func setupOutsideClickMonitor() {
         removeOutsideClickMonitor()
-        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            guard let self = self else { return }
-            if self.isPickingEmoji {
-                self.isPickingEmoji = false // Ignore this click (which closes character palette), but reset the flag
-                return
+        
+        // 1. Local click monitor to close window when clicking on other parts of our app
+        outsideClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            guard let self = self else { return event }
+            let clickPoint = NSEvent.mouseLocation
+            if !WindowManager.shared.contains(clickPoint) {
+                WindowManager.shared.close()
+                self.removeOutsideClickMonitor()
             }
-            WindowManager.shared.close()
-            self.removeOutsideClickMonitor()
+            return event
         }
+        
+        // 2. Observer for app resignation (clicks outside the app)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appResignedActive),
+            name: NSApplication.didResignActiveNotification,
+            object: nil
+        )
+    }
+    
+    @objc private func appResignedActive() {
+        WindowManager.shared.close()
+        removeOutsideClickMonitor()
     }
     
     private func removeOutsideClickMonitor() {
@@ -266,6 +300,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             NSEvent.removeMonitor(monitor)
             outsideClickMonitor = nil
         }
+        NotificationCenter.default.removeObserver(self, name: NSApplication.didResignActiveNotification, object: nil)
     }
     
     /// Maccy-style paste: copy → close → activate target → wait → Cmd+V
@@ -317,6 +352,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         self.settingsWindow = window
     }
     
+    /// Marker file URL: exists only after the user completes the welcome screen.
+    /// Deleting ~/Library/Application Support/SkyPaste/ removes it → fresh install.
+    static var setupMarkerURL: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("SkyPaste/.setup_complete")
+    }
+    
     @MainActor func showWelcomeWindow() {
         if let window = welcomeWindow {
             window.makeKeyAndOrderFront(nil)
@@ -326,14 +368,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         let welcomeView = WelcomeView(onContinue: { [weak self] in
             DispatchQueue.main.async {
-                UserDefaults.standard.set(true, forKey: "hasSeenWelcome")
+                // Create the marker file so we know setup is complete
+                FileManager.default.createFile(atPath: Self.setupMarkerURL.path, contents: nil)
                 self?.welcomeWindow?.orderOut(nil)
                 self?.welcomeWindow = nil
                 self?.togglePopover(nil)
             }
         })
         
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 450, height: 450),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 720),
                               styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
         window.center()
         window.titlebarAppearsTransparent = true
@@ -346,36 +389,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
     
     func applicationWillTerminate(_ notification: Notification) {
-        // If app was moved to Trash, auto-run full uninstall cleanup
-        let bundlePath = Bundle.main.bundlePath
-        if bundlePath.contains("/.Trash/") || bundlePath.contains("/Trash/") {
-            let bundleID = "com.sky.skypaste"
-            try? SMAppService.mainApp.unregister()
-            let script = """
-            sleep 5
-            /usr/bin/tccutil reset All \(bundleID) 2>/dev/null || true
-            /usr/bin/tccutil reset Accessibility \(bundleID) 2>/dev/null || true
-            /usr/bin/tccutil reset Notifications \(bundleID) 2>/dev/null || true
-            sqlite3 ~/Library/Application\\ Support/com.apple.TCC/TCC.db "DELETE FROM access WHERE client LIKE '%sky%' OR client LIKE '%skypaste%' OR client LIKE '%\(bundleID)%';" 2>/dev/null || true
-            sqlite3 /Library/Application\\ Support/com.apple.TCC/TCC.db "DELETE FROM access WHERE client LIKE '%sky%' OR client LIKE '%skypaste%' OR client LIKE '%\(bundleID)%';" 2>/dev/null || true
-            rm -f /Library/Application\\ Support/com.apple.TCC/AdhocSignatureCache/* 2>/dev/null || true
-            rm -f ~/Library/Application\\ Support/com.apple.TCC/AdhocSignatureCache/* 2>/dev/null || true
-            killall -HUP cfprefsd 2>/dev/null || true
-            rm -rf ~/Library/Application\\ Support/SkyPaste ~/Library/Application\\ Support/com.sky* ~/Library/Caches/SkyPaste ~/Library/Caches/com.sky* ~/Library/Logs/SkyPaste ~/Library/Logs/com.sky* ~/.SkyPaste ~/Library/Preferences/com.sky* ~/Library/Preferences/com.sky.skypaste* ~/Library/Preferences/\(bundleID)* ~/Library/Containers/com.sky* ~/Library/Containers/\(bundleID)* 2>/dev/null || true
-            /usr/bin/defaults delete \(bundleID) 2>/dev/null || true
-            /usr/bin/defaults delete \(bundleID) hasSeenWelcome 2>/dev/null || true
-            /usr/bin/defaults delete \(bundleID) hasRequestedNotifications 2>/dev/null || true
-            /usr/bin/defaults delete \(bundleID) hasRequestedAccessibility 2>/dev/null || true
-            /bin/launchctl remove \(bundleID) 2>/dev/null || true
-            rm -f ~/Library/LaunchAgents/\(bundleID)*.plist /Library/LaunchAgents/\(bundleID)*.plist 2>/dev/null || true
-            """
-            let p = Process()
-            p.launchPath = "/bin/bash"
-            p.arguments = ["-c", script]
-            try? p.run()
-            p.waitUntilExit()
-        }
-        
         monitorRef?.stop()
         HotkeyManager.shared.stop()
         ImageCache.shared.clear()

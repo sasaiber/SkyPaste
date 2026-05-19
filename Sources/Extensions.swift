@@ -1,5 +1,21 @@
 import SwiftUI
 import AppKit
+import ServiceManagement
+
+@available(macOS 13.0, *)
+extension SMAppService {
+    func registerSafe() {
+        if self.status != .enabled {
+            try? self.register()
+        }
+    }
+    
+    func unregisterSafe() {
+        if self.status == .enabled {
+            try? self.unregister()
+        }
+    }
+}
 
 // MARK: - Glass-like background with blur material
 extension View {
@@ -48,5 +64,21 @@ struct VisualEffectView: NSViewRepresentable {
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
         nsView.material = material
         nsView.blendingMode = blendingMode
+    }
+}
+
+// MARK: - Time formatting
+extension Date {
+    func formattedTime(using format: String) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        
+        if format == "ampm" {
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.setLocalizedDateFormatFromTemplate("h:mm a")
+        } else {
+            formatter.setLocalizedDateFormatFromTemplate("HH:mm")
+        }
+        return formatter.string(from: self)
     }
 }
