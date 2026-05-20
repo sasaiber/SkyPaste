@@ -1,0 +1,8 @@
+"Application" = "Aplicação:";
+"FirstCopyTime" = "Data da primeira cópia:";
+"LastCopyTime" = "Data da última cópia:";
+"NumberOfCopies" = "Número de cópias:";
+"PinKey" = "Pressione {pinKey} para fixar.";
+"UnpinKey" = "Pressione {pinKey} para desafixar.";
+"DeleteKey" = "Pressione {deleteKey} para excluir.";
+"PreviewKey" = "Pressione {previewKey} para alternar a pré-visualização.";

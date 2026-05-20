@@ -1,6 +1,7 @@
 import Foundation
 import ServiceManagement
 import AppKit
+import SwiftUI
 
 @MainActor
 class Storage: ObservableObject {
@@ -63,6 +64,8 @@ class Storage: ObservableObject {
         }
         array.removeAll { $0.folderID == folderID }
         if !key.isEmpty {
+            // Remove the same key+mod shortcut if it's already assigned to any other folder
+            array.removeAll { $0.keyText.lowercased() == key.lowercased() && $0.modifiers == mod }
             array.append(HotkeyManager.FolderShortcut(folderID: folderID, keyText: key, modifiers: mod))
         }
         if let newData = try? JSONEncoder().encode(array) {
@@ -92,6 +95,7 @@ class Storage: ObservableObject {
         setupDirectory()
         loadItems()
         loadFolders()
+        cleanGhostShortcuts()
     }
     
     private func setupDirectory() {
@@ -217,19 +221,48 @@ class Storage: ObservableObject {
     }
     
     func factoryReset() {
-        // Remove from login items
-        SMAppService.mainApp.unregisterSafe()
+        // Clear items and folders
+        items.removeAll()
+        folders.removeAll()
+        saveItems()
+        saveFolders()
         
-        // Clear all files
+        // Clear cached files (like images) but preserve the setup marker so the welcome screen isn't shown again
         if let dir = documentDirectory {
-            try? fileManager.removeItem(at: dir)
+            let imagesDir = dir.appendingPathComponent("Images")
+            try? fileManager.removeItem(at: imagesDir)
+            
+            if let hFile = dataFile { try? fileManager.removeItem(at: hFile) }
+            if let fFile = foldersFile { try? fileManager.removeItem(at: fFile) }
         }
         
-        // Wipe UserDefaults
+        // Wipe UserDefaults but PRESERVE login item preferences, accessibility, and notifications
+        let preserveKeys = [
+            "launchAtLoginEnabled",
+            "hasDismissedWelcome",
+            "hasRequestedAccessibility",
+            "hasRequestedNotifications",
+            "enableNotifications",
+            "popupPosition",
+            "updateCheckFrequency",
+            "lastUpdateCheckDate"
+        ]
+        
+        var preservedValues: [String: Any] = [:]
+        for key in preserveKeys {
+            if let val = UserDefaults.standard.object(forKey: key) {
+                preservedValues[key] = val
+            }
+        }
+        
         if let bundleID = Bundle.main.bundleIdentifier {
             UserDefaults.standard.removePersistentDomain(forName: bundleID)
-            UserDefaults.standard.synchronize()
         }
+        
+        for (key, val) in preservedValues {
+            UserDefaults.standard.set(val, forKey: key)
+        }
+        UserDefaults.standard.synchronize()
         
         // Terminate the app completely
         DispatchQueue.main.async {
@@ -294,16 +327,20 @@ class Storage: ObservableObject {
     }
     
     func clearFolder(id: UUID) {
-        invalidateFolderCountCache()
-        let toDelete = items.filter { $0.folderID == id }
-        for item in toDelete {
-            if let url = item.fileURL, url.path.contains("SkyPaste/Images") {
-                try? fileManager.removeItem(at: url)
-                ImageCache.shared.removeImage(for: url)
+        DispatchQueue.main.async {
+            self.invalidateFolderCountCache()
+            let toDelete = self.items.filter { $0.folderID == id }
+            for item in toDelete {
+                if let url = item.fileURL, url.path.contains("SkyPaste/Images") {
+                    try? self.fileManager.removeItem(at: url)
+                    ImageCache.shared.removeImage(for: url)
+                }
             }
+            withAnimation(.easeOut(duration: 0.2)) {
+                self.items.removeAll { $0.folderID == id }
+            }
+            self.saveItems()
         }
-        items.removeAll { $0.folderID == id }
-        saveItems()
     }
     
     func updateFolder(_ folder: AppFolder) {
@@ -314,14 +351,18 @@ class Storage: ObservableObject {
     }
     
     func assign(item id: UUID, to folderID: UUID?) {
-        invalidateFolderCountCache()
-        if let index = items.firstIndex(where: { $0.id == id }) {
-            items[index].folderID = folderID
-            saveItems()
-            
-            if let folderID = folderID, let folder = folders.first(where: { $0.id == folderID }) {
-                let shortcut = getFolderShortcut(folderID: folderID, type: "move").map { formatShortcut(key: $0.key, modifiers: $0.mod) }
-                showFolderMoveToast(folder: folder, shortcut: shortcut)
+        DispatchQueue.main.async {
+            self.invalidateFolderCountCache()
+            if let index = self.items.firstIndex(where: { $0.id == id }) {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    self.items[index].folderID = folderID
+                }
+                self.saveItems()
+                
+                if let folderID = folderID, let folder = self.folders.first(where: { $0.id == folderID }) {
+                    let shortcut = self.getFolderShortcut(folderID: folderID, type: "move").map { self.formatShortcut(key: $0.key, modifiers: $0.mod) }
+                    self.showFolderMoveToast(folder: folder, shortcut: shortcut)
+                }
             }
         }
     }
@@ -337,15 +378,19 @@ class Storage: ObservableObject {
     }
     
     func togglePin(for id: UUID) {
-        invalidateFolderCountCache()
-        if let index = items.firstIndex(where: { $0.id == id }) {
-            items[index].isPinned.toggle()
-            if items[index].isPinned {
-                // Determine next pin order
-                let nextOrder = items.filter { $0.isPinned }.map { $0.pinnedOrder }.min() ?? 0
-                items[index].pinnedOrder = nextOrder - 1
+        DispatchQueue.main.async {
+            self.invalidateFolderCountCache()
+            if let index = self.items.firstIndex(where: { $0.id == id }) {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    self.items[index].isPinned.toggle()
+                    if self.items[index].isPinned {
+                        // Determine next pin order
+                        let nextOrder = self.items.filter { $0.isPinned }.map { $0.pinnedOrder }.min() ?? 0
+                        self.items[index].pinnedOrder = nextOrder - 1
+                    }
+                }
+                self.saveItems()
             }
-            saveItems()
         }
     }
     
@@ -364,16 +409,20 @@ class Storage: ObservableObject {
     }
     
     func deleteItem(with id: UUID) {
-        invalidateFolderCountCache()
-        if let index = items.firstIndex(where: { $0.id == id }) {
-            let item = items[index]
-            if let url = item.fileURL, url.path.contains("SkyPaste/Images") {
-                try? fileManager.removeItem(at: url)
-                ImageCache.shared.removeImage(for: url)
+        DispatchQueue.main.async {
+            self.invalidateFolderCountCache()
+            if let index = self.items.firstIndex(where: { $0.id == id }) {
+                let item = self.items[index]
+                if let url = item.fileURL, url.path.contains("SkyPaste/Images") {
+                    try? self.fileManager.removeItem(at: url)
+                    ImageCache.shared.removeImage(for: url)
+                }
+                _ = withAnimation(.easeOut(duration: 0.2)) {
+                    self.items.remove(at: index)
+                }
+                self.saveItems()
+                NSPasteboard.general.clearContents()
             }
-            items.remove(at: index)
-            saveItems()
-            NSPasteboard.general.clearContents()
         }
     }
     
@@ -489,5 +538,39 @@ class Storage: ObservableObject {
     private func saveFolders() {
         guard let url = foldersFile, let data = try? JSONEncoder().encode(folders) else { return }
         try? data.write(to: url)
+    }
+    
+    private func cleanGhostShortcuts() {
+        let activeIDs = Set(folders.map { $0.id })
+        let defaults = UserDefaults.standard
+        var changed = false
+        
+        if let data = defaults.data(forKey: "folderShortcuts"),
+           let decoded = try? JSONDecoder().decode([HotkeyManager.FolderShortcut].self, from: data) {
+            let filtered = decoded.filter { activeIDs.contains($0.folderID) }
+            if filtered.count != decoded.count {
+                if let newData = try? JSONEncoder().encode(filtered) {
+                    defaults.set(newData, forKey: "folderShortcuts")
+                    changed = true
+                }
+            }
+        }
+        
+        if let data = defaults.data(forKey: "folderMoveShortcuts"),
+           let decoded = try? JSONDecoder().decode([HotkeyManager.FolderShortcut].self, from: data) {
+            let filtered = decoded.filter { activeIDs.contains($0.folderID) }
+            if filtered.count != decoded.count {
+                if let newData = try? JSONEncoder().encode(filtered) {
+                    defaults.set(newData, forKey: "folderMoveShortcuts")
+                    changed = true
+                }
+            }
+        }
+        
+        if changed {
+            DispatchQueue.main.async {
+                HotkeyManager.shared.start()
+            }
+        }
     }
 }

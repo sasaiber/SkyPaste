@@ -9,10 +9,15 @@ let package = Package(
     products: [
         .executable(name: "SkyPaste", targets: ["SkyPaste"])
     ],
-
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.0.0")
+    ],
     targets: [
         .executableTarget(
             name: "SkyPaste",
+            dependencies: [
+                .product(name: "Sparkle", package: "Sparkle")
+            ],
             path: "Sources",
             linkerSettings: [
                 .linkedFramework("SwiftUI"),

@@ -123,11 +123,27 @@ struct FoldersTabView: View {
             
             HStack(spacing: 16) {
                 ShortcutRow(label: "Open:", actionName: "Open '\(folder.name)'", key: folderShortcuts[folder.id]?.key ?? "", mod: folderShortcuts[folder.id]?.mod ?? 0) { k, m in
-                    folderShortcuts[folder.id] = (k, m); onSaveShortcuts()
+                    if !k.isEmpty {
+                        for (fid, value) in folderShortcuts {
+                            if fid != folder.id && value.key.lowercased() == k.lowercased() && value.mod == m {
+                                folderShortcuts.removeValue(forKey: fid)
+                            }
+                        }
+                    }
+                    folderShortcuts[folder.id] = (k, m)
+                    onSaveShortcuts()
                 }
                 
                 ShortcutRow(label: "Move:", actionName: "Move to '\(folder.name)'", key: folderMoveShortcuts[folder.id]?.key ?? "", mod: folderMoveShortcuts[folder.id]?.mod ?? 0) { k, m in
-                    folderMoveShortcuts[folder.id] = (k, m); onSaveShortcuts()
+                    if !k.isEmpty {
+                        for (fid, value) in folderMoveShortcuts {
+                            if fid != folder.id && value.key.lowercased() == k.lowercased() && value.mod == m {
+                                folderMoveShortcuts.removeValue(forKey: fid)
+                            }
+                        }
+                    }
+                    folderMoveShortcuts[folder.id] = (k, m)
+                    onSaveShortcuts()
                 }
                 
                 Spacer()

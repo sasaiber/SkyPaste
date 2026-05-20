@@ -97,7 +97,7 @@ class FloatingPanel: NSPanel, NSWindowDelegate {
         
         super.init(
             contentRect: contentRect,
-            styleMask: [.nonactivatingPanel, .borderless],
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
@@ -113,6 +113,7 @@ class FloatingPanel: NSPanel, NSWindowDelegate {
         titlebarAppearsTransparent = true
         isMovableByWindowBackground = true
         hidesOnDeactivate = false
+        isOpaque = false
         backgroundColor = .clear
         hasShadow = true
         titlebarSeparatorStyle = .none
@@ -273,6 +274,7 @@ class FloatingPanel: NSPanel, NSWindowDelegate {
         } else {
             setFrame(targetFrame, display: true)
         }
+        invalidateShadow()
     }
 
     

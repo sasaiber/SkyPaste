@@ -247,29 +247,50 @@ struct AppPickerView: View {
     }
     
     private func loadApps() {
-        let appDirs = [
-            "/Applications",
-            "/System/Applications",
-            "/System/Applications/Utilities",
-            NSHomeDirectory() + "/Applications"
-        ]
-        
-        var apps: [(name: String, bundleID: String, icon: NSImage)] = []
-        for dir in appDirs {
-            guard let contents = try? FileManager.default.contentsOfDirectory(atPath: dir) else { continue }
-            for item in contents where item.hasSuffix(".app") {
-                let path = dir + "/" + item
-                let infoPlist = path + "/Contents/Info.plist"
-                if let plist = NSDictionary(contentsOfFile: infoPlist),
-                   let bundleID = plist["CFBundleIdentifier"] as? String {
-                    let name = (plist["CFBundleName"] as? String) ?? (plist["CFBundleDisplayName"] as? String) ?? item.replacingOccurrences(of: ".app", with: "")
-                    let icon = NSWorkspace.shared.icon(forFile: path)
-                    apps.append((name: name, bundleID: bundleID, icon: icon))
+        DispatchQueue.global(qos: .userInitiated).async {
+            let appDirs = [
+                "/Applications",
+                "/System/Applications",
+                "/System/Applications/Utilities",
+                NSHomeDirectory() + "/Applications"
+            ]
+            
+            var apps: [(name: String, bundleID: String, icon: NSImage)] = []
+            let fm = FileManager.default
+            
+            for dirPath in appDirs {
+                let dirURL = URL(fileURLWithPath: dirPath)
+                guard let enumerator = fm.enumerator(
+                    at: dirURL,
+                    includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey],
+                    options: [.skipsPackageDescendants, .skipsHiddenFiles]
+                ) else { continue }
+                
+                while let fileURL = enumerator.nextObject() as? URL {
+                    if fileURL.pathExtension == "app" {
+                        let infoPlist = fileURL.appendingPathComponent("Contents/Info.plist")
+                        if let plist = NSDictionary(contentsOf: infoPlist),
+                           let bundleID = plist["CFBundleIdentifier"] as? String {
+                            let name = (plist["CFBundleName"] as? String) 
+                                ?? (plist["CFBundleDisplayName"] as? String) 
+                                ?? fileURL.deletingPathExtension().lastPathComponent
+                            let icon = NSWorkspace.shared.icon(forFile: fileURL.path)
+                            apps.append((name: name, bundleID: bundleID, icon: icon))
+                        }
+                    }
                 }
             }
+            
+            // De-duplicate by bundleID
+            var uniqueApps: [String: (name: String, bundleID: String, icon: NSImage)] = [:]
+            for app in apps {
+                uniqueApps[app.bundleID] = app
+            }
+            let sortedApps = Array(uniqueApps.values).sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
+            
+            DispatchQueue.main.async {
+                self.installedApps = sortedApps
+            }
         }
-        
-        apps.sort { $0.name < $1.name }
-        installedApps = apps
     }
 }

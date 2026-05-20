@@ -1,8 +1,8 @@
 {
   "/Users/sky/Documents/SkyPaste/build.sh": {
-    "mtime": 1779029989.8035626,
-    "ast_hash": "6b56e3eb12e2f297efbd1080c3c4c65e",
-    "semantic_hash": "6b56e3eb12e2f297efbd1080c3c4c65e"
+    "mtime": 1779233579.105035,
+    "ast_hash": "dd23ffc7e07bd54c0cdb75144240b408",
+    "semantic_hash": ""
   },
   "/Users/sky/Documents/SkyPaste/Package.swift": {
     "mtime": 1779062842.802426,
@@ -120,8 +120,8 @@
     "semantic_hash": "5d1c081e7e5334db2ca12c0ff8a583c4"
   },
   "/Users/sky/Documents/SkyPaste/Sources/Storage.swift": {
-    "mtime": 1779228094.0313482,
-    "ast_hash": "ce1021d24cb7076a86d3fb81fe7e50ae",
+    "mtime": 1779234696.153802,
+    "ast_hash": "931023fd12daa2355b29080dc54b45fb",
     "semantic_hash": ""
   },
   "/Users/sky/Documents/SkyPaste/Sources/ImageCache.swift": {
@@ -130,13 +130,13 @@
     "semantic_hash": "0999edb252062a8658f49e2976d32a98"
   },
   "/Users/sky/Documents/SkyPaste/Sources/ClipboardMonitor.swift": {
-    "mtime": 1779128742.0192926,
-    "ast_hash": "2d210c17f6c2880e59a4de53984a0dcf",
-    "semantic_hash": "2d210c17f6c2880e59a4de53984a0dcf"
+    "mtime": 1779294413.3797758,
+    "ast_hash": "8babbfaf50a3b63b368f3bcbca1d85f4",
+    "semantic_hash": ""
   },
   "/Users/sky/Documents/SkyPaste/Sources/HotkeyManager.swift": {
-    "mtime": 1779228357.629068,
-    "ast_hash": "6979c6171853356e01d67445abf5e096",
+    "mtime": 1779234417.5491896,
+    "ast_hash": "295efdc76ff08a7f52873fad2b273477",
     "semantic_hash": ""
   },
   "/Users/sky/Documents/SkyPaste/Sources/UpdateChecker.swift": {
@@ -160,13 +160,13 @@
     "semantic_hash": ""
   },
   "/Users/sky/Documents/SkyPaste/Sources/App.swift": {
-    "mtime": 1779228094.0295115,
-    "ast_hash": "62147c4cfeac6ce18a1c8fb130dc3034",
+    "mtime": 1779295002.3669417,
+    "ast_hash": "044b08b5a543db55d3ad96e3b2481f7f",
     "semantic_hash": ""
   },
   "/Users/sky/Documents/SkyPaste/Sources/UI/FoldersTabView.swift": {
-    "mtime": 1779206894.0173233,
-    "ast_hash": "7b7127f72c59207b6dd9a261347a8335",
+    "mtime": 1779234686.6274874,
+    "ast_hash": "3dd532981d1d88ec823eb18064975ded",
     "semantic_hash": ""
   },
   "/Users/sky/Documents/SkyPaste/Sources/UI/AboutTabView.swift": {
@@ -175,13 +175,13 @@
     "semantic_hash": ""
   },
   "/Users/sky/Documents/SkyPaste/Sources/UI/FolderEditView.swift": {
-    "mtime": 1779207921.3705943,
-    "ast_hash": "533517cb9b61a367c5171cf0ddc5f1af",
+    "mtime": 1779234500.8921173,
+    "ast_hash": "efa259f8c276f8fb61615171ebf845ff",
     "semantic_hash": ""
   },
   "/Users/sky/Documents/SkyPaste/Sources/UI/PreferencesView.swift": {
-    "mtime": 1779223603.1729906,
-    "ast_hash": "f4aa82dff2ddc53ab7ad6ddc511c3e82",
+    "mtime": 1779294441.1746137,
+    "ast_hash": "474487d219af121e0b4b6f0bb0f952af",
     "semantic_hash": ""
   },
   "/Users/sky/Documents/SkyPaste/Sources/UI/StorageTabView.swift": {
@@ -195,18 +195,18 @@
     "semantic_hash": ""
   },
   "/Users/sky/Documents/SkyPaste/Sources/UI/ClipboardItemRow.swift": {
-    "mtime": 1779228649.220067,
-    "ast_hash": "4a127e89e4fe899e1cf6a1254d465415",
+    "mtime": 1779238051.8722858,
+    "ast_hash": "73a4a18e75621596bd6d405fcf26bfc3",
     "semantic_hash": ""
   },
   "/Users/sky/Documents/SkyPaste/Sources/UI/EmojiPickerButton.swift": {
-    "mtime": 1779208039.0246131,
-    "ast_hash": "ed0bff903cb0fb61e7a6aabf79f626ed",
+    "mtime": 1779294956.6516862,
+    "ast_hash": "adb85e1063969b3a0bab9c4377ceb677",
     "semantic_hash": ""
   },
   "/Users/sky/Documents/SkyPaste/Sources/UI/MainView.swift": {
-    "mtime": 1779229726.716309,
-    "ast_hash": "41b71b2c8eb3d86fd0670af0b44506dc",
+    "mtime": 1779294422.5855336,
+    "ast_hash": "4cba11dc7dc72b950d9a5eb904222a27",
     "semantic_hash": ""
   },
   "/Users/sky/Documents/SkyPaste/Sources/UI/ShortcutRecorder.swift": {
@@ -285,13 +285,708 @@
     "semantic_hash": ""
   },
   "/Users/sky/Documents/SkyPaste/.agents/rules/graphify.md": {
-    "mtime": 1779155589.9826846,
+    "mtime": 1779155589.9826844,
     "ast_hash": "f1e53ecc9194573d3c28fc116c743a2e",
     "semantic_hash": ""
   },
   "/Users/sky/Documents/SkyPaste/fix_mainview.py": {
     "mtime": 1779228009.4760528,
     "ast_hash": "9880638e4a95aefdb6d71dc38c3fe114",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/AppStoreReview.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "fc1bc0f1c488084c7f1660df91582b94",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/PopupPosition.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "9d00410b58716527d47e0a9037fc10f8",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Storage.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "018d618a81882a41c53665a2e9b49db9",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/SearchVisibility.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "f2b42993e05738aac4a0d6624bee8376",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Throttler.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "85eab79cf9f6943449114f4106e71d7c",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/GlobalHotKey.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "e6b16ff1127d1fbf2051dd40ec7a6883",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/PinsPosition.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "6c67299a54b15a9172a1216bc9948b0c",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/HighlightMatch.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "97afd9c2f0a68228761006c0ecb753a6",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/ItemsProtocol.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "56eed214b0a17fc4931376a811db32fe",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/ColorImage.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "31f6de17fceead601727b4f2a497db57",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/About.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "8e7cdcad5cbc48082b22da9fda9c0b3f",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/FloatingPanel.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "d9ee4f0196a75b35177e98a897dc97c5",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Sorter.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "1dd3c1c904b9dae674371627dd6064dd",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Accessibility.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "3c754e265156e8941e39594fc81c5371",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/KeyChord.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "75afb348fc6e258492491c1e3a4e8f41",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/ApplicationImageCache.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "479e633a7434a5be0cf557ba7a6f2a71",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/KeyShortcut.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "9bd862fd7edd01f4a86edf5fe0b70478",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/MaccyApp.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "183111bd021b8f3ee73de57206832b64",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/AppDelegate.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "7872e638f46712e677ca34974619e5a9",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Clipboard.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "a685b8d8c7f634a2a04678db0429e4cb",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/MenuIcon.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "6667e91e1648a6f5e0f48cbff7f00437",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/ApplicationImage.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "882a95afed4f052b03a78df7e0abb3aa",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Selection.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "7b885fbc8251f7123587693ea7b809f0",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/SoftwareUpdater.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "fd3efeb62ea400a5d9bd77d065aca3ed",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/HistoryItemAction.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "c690a855b051d999d8d8c7b7563a9be6",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/PasteStack.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "5868cfb7a78d2a48d579f69409ea6eda",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Search.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "9b1a2c5c7d2c7cdbb5c210112ee134de",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/KeyboardLayout.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "67b1f52a93068627cf109da671b01635",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Notifier.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "8cbb31d8dbac5c64b8e82079af73fe41",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Settings/PinsSettingsPane.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "156eb3dc3708bb96aaf01fbdca37870b",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Settings/StorageSettingsPane.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "dcde30e2635f8286ebdba110713fbd4e",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Settings/AdvancedSettingsPane.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "9c80d9ad67a1e75153cd76101abbaece",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Settings/AppearanceSettingsPane.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "7e1558a417f858d94b18fc258dd55e9e",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Settings/GeneralSettingsPane.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "582f8ef631abc4e31ad70c1b848d09e2",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Settings/IgnoreSettingsPane.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "b3bde040d06fa79b3002f93dedebc718",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Settings/IgnoreSettingsPane/IgnorePasteboardTypesSettingsView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "ad1c985d0f48538cd25f44309c4e3d78",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Settings/IgnoreSettingsPane/IgnoreApplicationsSettingsView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "cee48018d57990c9e09ecd0d3ded6d5e",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Settings/IgnoreSettingsPane/IgnoreRegexpsSettingsView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "bda1c429a23b468f5efb832735431d1f",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/Contents.json": {
+    "mtime": 1770736220.0,
+    "ast_hash": "9deb2ada1cc834bbebf8bbad9c8978a1",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/clipboard.fill.imageset/Contents.json": {
+    "mtime": 1770736220.0,
+    "ast_hash": "ec636343f644e4d7f67d9bf69190a425",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/StatusBarMenuImage.imageset/Contents.json": {
+    "mtime": 1770736220.0,
+    "ast_hash": "acc8beb6b404b867d07d0459a619b41a",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/AppIcon.appiconset/Contents.json": {
+    "mtime": 1770736220.0,
+    "ast_hash": "ef3ba498249a0d86d9deb3aecb947ec3",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/paperclip.imageset/Contents.json": {
+    "mtime": 1770736220.0,
+    "ast_hash": "009e586ecc2ae3820ada359c2a7756cc",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/scissors.imageset/Contents.json": {
+    "mtime": 1770736220.0,
+    "ast_hash": "7cd97e8b9e0e5f25b557a7b581df3b41",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Observables/AppState.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "1ad87e8ba14bffea07bc292413d8f748",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Observables/Footer.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "7829831abc3bc2d9c625f31ecca8fd61",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Observables/SlideoutController.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "4000fdcbcb00856957b8db88b3793baa",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Observables/FooterItem.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "f19d3fa10858c5d1fa0bbbe1a2976a3d",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Observables/ModifierFlags.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "a6dd70a6d321c83d46a2e71c42855f4e",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Observables/NavigationManager.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "ed6b3ba41d333ac25e4c88f5f1de573e",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Observables/HistoryItemDecorator.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "a6ca829e769811c81c0360196cce3568",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Observables/History.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "585c259b5e9a19e195f6cff2e3f7f6b3",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Observables/Popup.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "d232058547ebb2f3463e6221764fa910",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Models/HistoryItem.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "e7c4da299429728a8615584533c11fbd",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Models/HistoryItemContent.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "df7f2d24884867908ce161f9970ea263",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/Collection+Surrounding.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "9d796ce90305fde04b45097e1cc399a8",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/NSImage+Names.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "24673ff1849a954256c2fbb6cce123ce",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/NSRect+Centered.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "a894cb0e87b282a3f2e9ebbaf4739c61",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/Color+Random.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "872ee53d2f16af022f9c804c7d826543",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/String+Shortened.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "c23c58f36c0d7448105c29dbdb1dce01",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/NSSize+DefaultsSerializable.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "f089c5f5ece784bf79160608d21a5bc6",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/Sauce+KeyboardShortcuts.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "1a049d742b6c0efe7f315c41c2d39795",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/NSApplication+Windows.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "ad17bf571f9ed41309abdae4f842b83e",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/NSPoint+DefaultsSerializable.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "f8a4c4754003be4d38443f21781e5447",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/NSScreen+ForPopup.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "51cc996ec28f8379cb3432c002c86427",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/NSSound+Named.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "00788760bc5b9c1fb7d9460e5bbc0b56",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/NSRunningApplication+WindowFrame.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "41106585a8829d7899a76ec915c6952b",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/KeyboardShortcuts.Name+Shortcuts.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "07490acd03df113a68fab1923f25290d",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/String+Identifiable.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "8fef5f7f6201bc937e08c0040b77d905",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/NSPasteboard.PasteboardType+Types.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "5011f5008bf0ffa5574b6a74773c4cab",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/ModifierFlags+Description.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "17b6c03d65d1f0ab08132130025d821a",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/Dictionary+RemoveItem.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "4130709edef41804cf90223fe2760209",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/Defaults.Keys+Names.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "cf510d9b5b1b7fc9146a08cc6973a800",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/KeyEquivalent+Keys.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "3e415f1b77e272462bb7888a1a114fe4",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/NSImage+Resized.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "f5028ed85d6624f81548164eb33bb783",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/Settings.PaneIdentifier+Panes.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "1e60638c105ad3aae1b6566b069dfdd2",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Extensions/NSWorkspace+ApplicationName.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "89ed5844ff9f6cfc977f3988f2d2cb2c",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Intents/AppIntentError.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "c9338da0cf36713c097be98c42bbacb5",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Intents/Delete.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "1c85a2d4d406345f88afdc4af7090dbc",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Intents/Clear.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "517e3c1cc9a5134a7e1d6e8818111783",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Intents/HistoryItemAppEntity.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "c6f7a56357e62cfafe9be2a46c6685fa",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Intents/Select.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "f9836b523b37940ce922c5652dec25de",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Intents/Get.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "a88fe58f508cb7ac2dc29b6200237be9",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/AsyncView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "ecedbb4a4efe58a5e0d5eb5cdd7e65d5",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/AppImageView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "d1064fbdda427a243cccbe594f6b914b",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/PinsView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "e74e3f7c7e33dd32459f33b8b828153b",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/MouseMovedViewModifer.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "51fd99eed02704636a4a37185760406f",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/FooterView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "6660d41e9aedf48bf7a1db64e66f1edb",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/SlideoutView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "47b1fd529c658136629b2d6f851e6565",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/ToolbarView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "bed6260e848cc8a861e409087a62a14f",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/PasteStackPreviewView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "f0cd623657b9e190d020e5a265430310",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/SearchFieldView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "6e6dd6cd4830298374665c1fa3db8145",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/HeaderView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "7782a948ec7ffcdd415c73d169b613b6",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/KeyboardShortcutView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "58282752daa4edf9ae12acf6d7643f86",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/ListItemTitleView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "9226a3925052ea6bea9eac15c34facae",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/HeightReaderModifier.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "4aeb2707aed7c6693598c0c01100ab9c",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/KeyHandlingView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "0b9a3516aab15f363a77ee2364694891",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/HistoryItemView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "7cf04da4997bcd586eee2af12f90a304",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/PasteStackItemView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "92ad50e2aeebe07d620f861f522196fe",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/ListHeaderView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "afe165e0e171f09c7d6e87d787fc96e2",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/MultipleSelectionListView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "1342b70504bfacae7e1502b8ceeb9091",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/HoverSelectionModifier.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "520d07b1efaa381154911f25816826c5",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/WrappingTextView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "e04c3a5b5a852ba3bfa090bd27c574d3",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/PreviewItemView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "dbaec3a359433e7b6b711a92d909944f",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/VisualEffectView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "cd530e3807271da9c4ced347d629d414",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/ContentView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "c6a7394832e3499edf9a9b45314307b0",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/HistoryListView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "9905a4fda81cf3616eb2e973ed8b2703",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/ListItemView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "d8ad3d6f7b735b1a8eb9eac9116764e0",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/SlideoutContentView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "bd8d720cf1661c75c794daab5bc09434",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/ConfirmationView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "9e5ced52eea8e2c38a35605651ea6f71",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/FooterItemView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "8b3a2434d68e762fc6900d6238e2057f",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Views/PasteStackView.swift": {
+    "mtime": 1770736220.0,
+    "ast_hash": "f38fb87ffacd3f3b8e4b3fcd3324c611",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/.github/copilot-instructions.md": {
+    "mtime": 1779293625.955735,
+    "ast_hash": "ec2dc0dc7bef63488889f34de2f5584d",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/clipboard.fill.imageset/clipboard.fill.light_32.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "bff4a9e278aff1c3d0788c80d2fcbb45",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/clipboard.fill.imageset/clipboard.fill.dark_16.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "ba2c0b491d948443db71df9607fa2eca",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/clipboard.fill.imageset/clipboard.fill.dark_32.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "24d510b032289eb2dc520976ae31be4f",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/clipboard.fill.imageset/clipboard.fill.light_16.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "e92422b0f707eb6fe023242b9154b1ad",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/StatusBarMenuImage.imageset/LightMenuBar-16w.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "dc2f6da5b878081f3031a7a73f5bf75a",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/StatusBarMenuImage.imageset/DarkMenuBar-32w.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "260968fba949b7984840bf62982fca97",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/StatusBarMenuImage.imageset/LightMenuBar-32w.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "f7de5fb9913341acf1cffe1ead1846fe",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/StatusBarMenuImage.imageset/DarkMenuBar-16w.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "b470911d7c0137ff07ba9f40d563b84a",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/AppIcon.appiconset/AppIcon (Big Sur)-32w-1.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "5941dbd7cd3e62770c9743164739058c",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/AppIcon.appiconset/AppIcon (Big Sur)-512w.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "21749fd44eb3644d9aa52c5bef889207",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/AppIcon.appiconset/AppIcon (Big Sur)-512w-1.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "21749fd44eb3644d9aa52c5bef889207",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/AppIcon.appiconset/AppIcon (Big Sur)-1024w.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "d934776d50d6a3d29be6127fbadae701",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/AppIcon.appiconset/AppIcon (Big Sur)-64w.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "66f2e1aee1608e622367c5157401d40d",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/AppIcon.appiconset/AppIcon (Big Sur)-32w.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "5941dbd7cd3e62770c9743164739058c",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/AppIcon.appiconset/AppIcon (Big Sur)-128w.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "8d728057d9d69848c427814efc4bdf3a",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/AppIcon.appiconset/AppIcon (Big Sur)-256w.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "014f68e0c79ed872e6a6ab46659776d6",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/AppIcon.appiconset/AppIcon (Big Sur)-256w-1.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "014f68e0c79ed872e6a6ab46659776d6",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/AppIcon.appiconset/AppIcon (Big Sur)-16w.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "fdb1ab2ab084bbf4f81de43c39038d29",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/paperclip.imageset/clip.fill.light_32.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "6c5739638fb8dcb599e59975fed6e760",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/paperclip.imageset/clip.fill.dark_32 1.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "96df06be46c030c5de04bb386bb4ec34",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/paperclip.imageset/clip.fill.dark_16 1.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "26fe0c22c4c0c8e4dfa29ab092ed3517",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/paperclip.imageset/clip.fill.light_16.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "0e25428adde9eab4eeafa78c857cb240",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/scissors.imageset/scissors_dark_32.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "bd465e18544027a2276d74567f9af3f8",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/scissors.imageset/scissors_light_32.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "24b5ad59607d2915b67b3bfce2ba55e2",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/scissors.imageset/scissors_light_16.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "4c1d9f09862ab32020ff3f206f29d55d",
+    "semantic_hash": ""
+  },
+  "/Users/sky/Documents/SkyPaste/Maccy/Assets.xcassets/scissors.imageset/scissors_dark_16.png": {
+    "mtime": 1770736220.0,
+    "ast_hash": "ba5a84e01a7011ff6ff650f50c40a709",
     "semantic_hash": ""
   }
 }

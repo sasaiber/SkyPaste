@@ -12,10 +12,11 @@ struct PreferencesView: View {
         VStack(spacing: 0) {
             Picker("", selection: $selectedTab) {
                 Text("General").tag(0)
-                Text("Shortcuts").tag(1)
-                Text("Storage").tag(2)
-                Text("Folders").tag(3)
-                Text("About").tag(4)
+                Text("Notifications").tag(1)
+                Text("Shortcuts").tag(2)
+                Text("Storage").tag(3)
+                Text("Folders").tag(4)
+                Text("About").tag(5)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, 16)
@@ -23,17 +24,18 @@ struct PreferencesView: View {
             .padding(.bottom, 4)
             
             ScrollView {
-                if selectedTab == 3 {
+                if selectedTab == 4 {
                     FoldersTabWrapper(storage: storage)
                         .padding(16)
-                } else if selectedTab == 4 {
+                } else if selectedTab == 5 {
                     AboutTabView()
                 } else {
                     Form {
                         switch selectedTab {
                         case 0: GeneralTabView()
-                        case 1: ShortcutsTabView()
-                        case 2: StorageTabView(storage: storage)
+                        case 1: NotificationsTabView()
+                        case 2: ShortcutsTabView()
+                        case 3: StorageTabView(storage: storage)
                         default: EmptyView()
                         }
                     }
@@ -49,7 +51,6 @@ struct GeneralTabView: View {
     @AppStorage("launchAtLoginEnabled") private var launchAtLogin: Bool = false
     @AppStorage("autoPasteActive") private var autoPasteActive: Bool = true
     @AppStorage("pastePlainActive") private var pastePlainActive: Bool = false
-    @AppStorage("enableNotifications") private var enableNotifications: Bool = true
     @AppStorage("timeFormat") private var timeFormat: String = "24h"
     @AppStorage("popupPosition") private var popupPosition: String = "cursor"
     @AppStorage("previewDelay") private var previewDelay: Double = 200
@@ -87,31 +88,11 @@ struct GeneralTabView: View {
                     }
                 }
             Toggle("Paste without formatting by default", isOn: $pastePlainActive)
-            Toggle("Show notifications for copy/paste", isOn: $enableNotifications)
             Picker("Time format", selection: $timeFormat) {
                 Text("24-hour").tag("24h")
                 Text("AM/PM").tag("ampm")
             }
             .pickerStyle(.segmented)
-                .onChange(of: enableNotifications) { _, newValue in
-                    if newValue {
-                        UNUserNotificationCenter.current().getNotificationSettings { settings in
-                            DispatchQueue.main.async {
-                                switch settings.authorizationStatus {
-                                case .notDetermined:
-                                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
-                                case .denied, .provisional:
-                                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
-                                        NSWorkspace.shared.open(url)
-                                    }
-                                case .authorized: break
-                                @unknown default: break
-                                }
-                            }
-                        }
-                    }
-                }
-            
             Toggle("Show media preview thumbnails", isOn: Binding(
                 get: { !disableMediaPreviews },
                 set: { disableMediaPreviews = !$0 }
@@ -153,6 +134,36 @@ struct GeneralTabView: View {
         Section {
             Button("Grant Accessibility Permissions") { AppDelegate.shared.showWelcomeWindow() }
             Text("Only required for Auto-paste (⌘V simulation).").font(.caption).foregroundColor(.secondary)
+        }
+    }
+}
+
+struct NotificationsTabView: View {
+    @AppStorage("enableNotifications") private var enableNotifications: Bool = true
+    @AppStorage("bounceIconOnCopy") private var bounceIconOnCopy: Bool = false
+    
+    var body: some View {
+        Section("Copy Feedback") {
+            Toggle("Show system notifications", isOn: $enableNotifications)
+                .onChange(of: enableNotifications) { _, newValue in
+                    if newValue {
+                        UNUserNotificationCenter.current().getNotificationSettings { settings in
+                            DispatchQueue.main.async {
+                                switch settings.authorizationStatus {
+                                case .notDetermined:
+                                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+                                case .denied, .provisional:
+                                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
+                                        NSWorkspace.shared.open(url)
+                                    }
+                                case .authorized: break
+                                @unknown default: break
+                                }
+                            }
+                        }
+                    }
+                }
+            Toggle("Bounce menu bar icon", isOn: $bounceIconOnCopy)
         }
     }
 }
@@ -221,10 +232,15 @@ struct FoldersTabWrapper: View {
             showDeleteConfirmation: $showDeleteConfirmation,
             onValidate: nil,
             onSaveShortcuts: {
-                let array = folderShortcuts.map { HotkeyManager.FolderShortcut(folderID: $0.key, keyText: $0.value.key, modifiers: $0.value.mod) }
+                let activeIDs = Set(storage.folders.map { $0.id })
+                let filteredShortcuts = folderShortcuts.filter { activeIDs.contains($0.key) }
+                let array = filteredShortcuts.map { HotkeyManager.FolderShortcut(folderID: $0.key, keyText: $0.value.key, modifiers: $0.value.mod) }
                 if let data = try? JSONEncoder().encode(array) { UserDefaults.standard.set(data, forKey: "folderShortcuts") }
-                let moveArray = folderMoveShortcuts.map { HotkeyManager.FolderShortcut(folderID: $0.key, keyText: $0.value.key, modifiers: $0.value.mod) }
+                
+                let filteredMoveShortcuts = folderMoveShortcuts.filter { activeIDs.contains($0.key) }
+                let moveArray = filteredMoveShortcuts.map { HotkeyManager.FolderShortcut(folderID: $0.key, keyText: $0.value.key, modifiers: $0.value.mod) }
                 if let data = try? JSONEncoder().encode(moveArray) { UserDefaults.standard.set(data, forKey: "folderMoveShortcuts") }
+                
                 HotkeyManager.shared.start()
             }
         )
@@ -243,8 +259,41 @@ struct FoldersTabWrapper: View {
             }
         }
         .alert("Delete Folder", isPresented: $showDeleteConfirmation, presenting: folderToDelete) { folder in
-            Button("Delete Folder & Items", role: .destructive) { storage.clearFolder(id: folder.id); storage.deleteFolder(id: folder.id) }
-            Button("Keep Items, Delete Folder", role: .none) { storage.deleteFolder(id: folder.id) }
+            Button("Delete Folder & Items", role: .destructive) {
+                storage.clearFolder(id: folder.id)
+                storage.deleteFolder(id: folder.id)
+                folderShortcuts.removeValue(forKey: folder.id)
+                folderMoveShortcuts.removeValue(forKey: folder.id)
+                
+                // Save updated maps immediately
+                let activeIDs = Set(storage.folders.map { $0.id })
+                let filtered = folderShortcuts.filter { activeIDs.contains($0.key) }
+                let array = filtered.map { HotkeyManager.FolderShortcut(folderID: $0.key, keyText: $0.value.key, modifiers: $0.value.mod) }
+                if let data = try? JSONEncoder().encode(array) { UserDefaults.standard.set(data, forKey: "folderShortcuts") }
+                
+                let filteredMove = folderMoveShortcuts.filter { activeIDs.contains($0.key) }
+                let moveArray = filteredMove.map { HotkeyManager.FolderShortcut(folderID: $0.key, keyText: $0.value.key, modifiers: $0.value.mod) }
+                if let data = try? JSONEncoder().encode(moveArray) { UserDefaults.standard.set(data, forKey: "folderMoveShortcuts") }
+                
+                HotkeyManager.shared.start()
+            }
+            Button("Keep Items, Delete Folder", role: .none) {
+                storage.deleteFolder(id: folder.id)
+                folderShortcuts.removeValue(forKey: folder.id)
+                folderMoveShortcuts.removeValue(forKey: folder.id)
+                
+                // Save updated maps immediately
+                let activeIDs = Set(storage.folders.map { $0.id })
+                let filtered = folderShortcuts.filter { activeIDs.contains($0.key) }
+                let array = filtered.map { HotkeyManager.FolderShortcut(folderID: $0.key, keyText: $0.value.key, modifiers: $0.value.mod) }
+                if let data = try? JSONEncoder().encode(array) { UserDefaults.standard.set(data, forKey: "folderShortcuts") }
+                
+                let filteredMove = folderMoveShortcuts.filter { activeIDs.contains($0.key) }
+                let moveArray = filteredMove.map { HotkeyManager.FolderShortcut(folderID: $0.key, keyText: $0.value.key, modifiers: $0.value.mod) }
+                if let data = try? JSONEncoder().encode(moveArray) { UserDefaults.standard.set(data, forKey: "folderMoveShortcuts") }
+                
+                HotkeyManager.shared.start()
+            }
             Button("Cancel", role: .cancel) {}
         } message: { folder in
             Text("Folder \"\(folder.name)\" contains \(storage.itemCount(forFolderID: folder.id)) items. What would you like to do?")

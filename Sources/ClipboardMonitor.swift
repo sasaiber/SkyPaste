@@ -80,6 +80,15 @@ class ClipboardMonitor: ObservableObject {
         }
     }
 
+    @MainActor
+    private func handleCopyFeedback(for item: ClipboardItem) {
+        self.storage.addItem(item)
+        if UserDefaults.standard.bool(forKey: "bounceIconOnCopy") {
+            AppDelegate.shared.bounceStatusItem()
+        }
+        self.sendNotification(title: "Copied", body: item.title ?? "Clipboard Item")
+    }
+
     func start() {
         scheduleTimer()
     }
@@ -191,8 +200,7 @@ class ClipboardMonitor: ObservableObject {
                 
                 let finalItem = item
                 await MainActor.run {
-                    self.storage.addItem(finalItem)
-                    self.sendNotification(title: "Copied", body: finalItem.title ?? "Clipboard Item")
+                    self.handleCopyFeedback(for: finalItem)
                 }
                 return
             }
@@ -262,8 +270,7 @@ class ClipboardMonitor: ObservableObject {
                 
                 let finalItem = item
                 await MainActor.run {
-                    self.storage.addItem(finalItem)
-                    self.sendNotification(title: "Copied", body: finalItem.title ?? "Clipboard Item")
+                    self.handleCopyFeedback(for: finalItem)
                 }
                 return
             }
@@ -277,8 +284,7 @@ class ClipboardMonitor: ObservableObject {
                 )
                 let finalItem = item
                 await MainActor.run {
-                    self.storage.addItem(finalItem)
-                    self.sendNotification(title: "Copied", body: finalItem.title ?? "Clipboard Item")
+                    self.handleCopyFeedback(for: finalItem)
                 }
                 return
             }
@@ -293,8 +299,7 @@ class ClipboardMonitor: ObservableObject {
                 )
                 let finalItem = item
                 await MainActor.run {
-                    self.storage.addItem(finalItem)
-                    self.sendNotification(title: "Copied", body: finalItem.title ?? "Clipboard Item")
+                    self.handleCopyFeedback(for: finalItem)
                 }
             }
         }
@@ -470,8 +475,15 @@ class ClipboardMonitor: ObservableObject {
                         return URL(fileURLWithPath: urlString)
                     }
                 pasteboard.writeObjects(urls as [NSURL])
+                let legacyType = NSPasteboard.PasteboardType("NSFilenamesPboardType")
+                pasteboard.addTypes([legacyType], owner: nil)
+                let paths = urls.map { $0.path }
+                pasteboard.setPropertyList(paths, forType: legacyType)
             } else if let url = item.fileURL {
                 pasteboard.writeObjects([url as NSURL])
+                let legacyType = NSPasteboard.PasteboardType("NSFilenamesPboardType")
+                pasteboard.addTypes([legacyType], owner: nil)
+                pasteboard.setPropertyList([url.path], forType: legacyType)
             }
         default:
             break
@@ -481,6 +493,29 @@ class ClipboardMonitor: ObservableObject {
         sendNotification(title: "Pasted from SkyPaste", body: item.title ?? "Clipboard Item")
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             self?.start()
+        }
+    }
+
+    @MainActor
+    func copyURLsToPasteboard(urls: [URL]) {
+        stop()
+        pasteboard.clearContents()
+        
+        // Write modern NSURL objects
+        pasteboard.writeObjects(urls as [NSURL])
+        
+        // Explicitly add and write legacy filenames plist array for Finder compatibility
+        let legacyType = NSPasteboard.PasteboardType("NSFilenamesPboardType")
+        pasteboard.addTypes([legacyType], owner: nil)
+        let paths = urls.map { $0.path }
+        pasteboard.setPropertyList(paths, forType: legacyType)
+        
+        lastChangeCount = pasteboard.changeCount
+        
+        // Restart polling after delay using Swift concurrency (MainActor)
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            await MainActor.run { self?.start() }
         }
     }
 

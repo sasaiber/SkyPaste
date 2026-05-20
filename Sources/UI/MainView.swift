@@ -50,18 +50,11 @@ struct MainView: View {
     
     @State private var showingTrashAlert = false
     @State private var showingFolderTrashAlert = false
-    @State private var rowHeights: [UUID: CGFloat] = [:]
-    @State private var currentWindowHeight: CGFloat = 200
+    @State private var currentWindowHeight: CGFloat = 520
     
-    private var totalListHeight: CGFloat {
-        let displayedIDs = filteredItems.map { $0.id }
-        if displayedIDs.isEmpty { return 100 }
-        var sum: CGFloat = 0
-        for id in displayedIDs {
-            sum += rowHeights[id] ?? 70
-        }
-        return sum + 16
-    }
+    @AppStorage("disableMediaPreviews") private var disableMediaPreviews: Bool = false
+    @AppStorage("unlimitedMediaPreviews") private var unlimitedMediaPreviews: Bool = true
+    @AppStorage("maxPreviewsLimit") private var maxPreviewsLimit: Int = 10
     @AppStorage("suppressGlobalTrashWarning") private var suppressGlobalTrashWarning: Bool = false
 
     @AppStorage("hkPinKey") private var hkPinKey: String = "p"
@@ -280,19 +273,25 @@ struct MainView: View {
             
             clipboardList
         }
-        .frame(width: 400, alignment: .top)
+        .frame(width: 400, height: currentWindowHeight, alignment: .top)
         .glassBackground(cornerRadius: 16)
         .edgesIgnoringSafeArea(.all)
-        .onExitCommand { WindowManager.shared.close() }
-        .onAppear {
-            let windowHeight = min(totalListHeight + 52, 600)
-            currentWindowHeight = windowHeight
-            if let panel = WindowManager.shared.panel {
-                panel.verticallyResize(to: windowHeight, animate: false)
+        .onExitCommand {
+            if showingFolderSettings {
+                showingFolderSettings = false
+                editingFolderInMain = nil
+                itemToAssignToNewFolder = nil
+                urlsToExtractToNewFolder = nil
+                itemToExtractFrom = nil
+            } else {
+                WindowManager.shared.close()
             }
+        }
+        .onAppear {
             
             // Local key event monitor to handle delete/pin shortcuts robustly even when search field has focus
             keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                guard !showingFolderSettings else { return event }
                 let flags = event.modifierFlags.intersection([.command, .option, .shift, .control])
                 let expectedFlags = NSEvent.ModifierFlags(rawValue: UInt(hkDeleteModifiers)).intersection([.command, .option, .shift, .control])
                 
@@ -384,11 +383,7 @@ struct MainView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SkyPasteWindowDidShow"))) { _ in
-            let windowHeight = min(totalListHeight + 52, 600)
-            currentWindowHeight = windowHeight
             if let panel = WindowManager.shared.panel {
-                panel.verticallyResize(to: windowHeight, animate: false)
-                
                 // Force AppKit to update hover states by posting a dummy mouseMoved event at window load
                 let mouseLoc = panel.mouseLocationOutsideOfEventStream
                 if let dummyEvent = NSEvent.mouseEvent(
@@ -403,15 +398,6 @@ struct MainView: View {
                     pressure: 0
                 ) {
                     panel.postEvent(dummyEvent, atStart: true)
-                }
-            }
-        }
-        .onChange(of: totalListHeight) { _, newHeight in
-            let windowHeight = min(newHeight + 52, 600)
-            if windowHeight > currentWindowHeight {
-                currentWindowHeight = windowHeight
-                if let panel = WindowManager.shared.panel, panel.isPresented {
-                    panel.verticallyResize(to: windowHeight, animate: false)
                 }
             }
         }
@@ -645,11 +631,14 @@ struct MainView: View {
                      }
                      .onTapGesture {
                          NSApp.activate(ignoringOtherApps: true)
-                         let flags = NSApp.currentEvent?.modifierFlags ?? []
+                         let flags = (NSApp.currentEvent?.modifierFlags ?? []).union(NSEvent.modifierFlags)
                          let autoPaste = autoPasteActive
                          let defaultPlain = pastePlainActive
                          
-                         if flags.contains(.option) && flags.contains(.shift) {
+                         if flags.contains(.command) {
+                             AppDelegate.shared.monitorRef?.copyToPasteboard(item: item, plainTextOnly: false)
+                             WindowManager.shared.close()
+                         } else if flags.contains(.option) && flags.contains(.shift) {
                              AppDelegate.shared.monitorRef?.copyToPasteboard(item: item, plainTextOnly: false)
                              AppDelegate.shared.monitorRef?.triggerCmdV()
                              WindowManager.shared.close()
@@ -668,12 +657,6 @@ struct MainView: View {
                      .listRowSeparator(.hidden)
                      .contentShape(Rectangle())
                     .padding(.vertical, 4)
-                    .background(
-                         GeometryReader { geo in
-                             Color.clear
-                                 .preference(key: RowHeightPreferenceKey.self, value: [item.id: geo.size.height])
-                         }
-                     )
                 }
                 .onMove { source, destination in
                     let isReorderingPinnedOnly = source.allSatisfy { filteredItems[$0].isPinned }
@@ -685,12 +668,6 @@ struct MainView: View {
             .scrollIndicators(.hidden)
             .padding(.horizontal, 0)
             .padding(.vertical, 8)
-            .onPreferenceChange(RowHeightPreferenceKey.self) { dict in
-                for (id, h) in dict {
-                    rowHeights[id] = h
-                }
-            }
-            .frame(height: min(totalListHeight, 520))
             .onChange(of: filteredItems.first?.id) { _, topID in
                 if let id = topID { proxy.scrollTo(id, anchor: .top) }
             }
@@ -921,7 +898,7 @@ class LibraryWindowManager {
         close()
         
         let foldersCount = storage.folders.count
-        let estimatedLibHeight = foldersCount == 0 ? 100 : CGFloat(foldersCount) * 46 + 16
+        let estimatedLibHeight = foldersCount == 0 ? 100 : CGFloat(foldersCount * 42) + CGFloat(max(0, foldersCount - 1) * 4) + 16
         let initialHeight = min(estimatedLibHeight + 85, 440)
         
         let button = position == "statusItem" ? AppDelegate.shared.statusBarItem.button : nil
@@ -1015,18 +992,7 @@ struct LibraryContentView: View {
     
     @State private var searchText = ""
     @State private var monitor: Any?
-    @State private var folderRowHeights: [UUID: CGFloat] = [:]
-    @State private var currentLibraryWindowHeight: CGFloat = 200
-    
-    private var totalLibraryHeight: CGFloat {
-        let displayedIDs = filteredFolders.map { $0.id }
-        if displayedIDs.isEmpty { return 100 }
-        var sum: CGFloat = 0
-        for id in displayedIDs {
-            sum += folderRowHeights[id] ?? 46
-        }
-        return sum + CGFloat(max(0, displayedIDs.count - 1) * 4) + 16
-    }
+    @State private var currentLibraryWindowHeight: CGFloat = 440
     
     var filteredFolders: [AppFolder] {
         let sorted = storage.folders.sorted { $0.order < $1.order }
@@ -1066,42 +1032,21 @@ struct LibraryContentView: View {
                             onClose()
                         })
                         .onDrop(of: [.text], delegate: LibraryDropDelegate(folder: folder, storage: storage))
-                        .background(
-                            GeometryReader { geo in
-                                Color.clear
-                                    .preference(key: FolderRowHeightPreferenceKey.self, value: [folder.id: geo.size.height])
-                            }
-                        )
                     }
                 }
                 .padding(.horizontal, 8).padding(.vertical, 8)
             }
-            .onPreferenceChange(FolderRowHeightPreferenceKey.self) { dict in
-                for (id, h) in dict {
-                    folderRowHeights[id] = h
-                }
-            }
-            .frame(height: min(totalLibraryHeight, 355))
         }
-        .frame(width: 360, alignment: .top)
+        .frame(width: 360, height: currentLibraryWindowHeight, alignment: .top)
         .glassBackground(cornerRadius: 16)
         .onAppear {
             monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 if event.keyCode == 0x35 { onClose(); return nil }
                 return event
             }
-            let windowHeight = min(totalLibraryHeight + 85, 440)
-            currentLibraryWindowHeight = windowHeight
-            if let panel = LibraryWindowManager.shared.panel {
-                panel.verticallyResize(to: windowHeight, animate: false)
-            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SkyPasteLibraryWindowDidShow"))) { _ in
-            let windowHeight = min(totalLibraryHeight + 85, 440)
-            currentLibraryWindowHeight = windowHeight
             if let panel = LibraryWindowManager.shared.panel {
-                panel.verticallyResize(to: windowHeight, animate: false)
-                
                 // Force AppKit to update hover states by posting a dummy mouseMoved event at window load
                 let mouseLoc = panel.mouseLocationOutsideOfEventStream
                 if let dummyEvent = NSEvent.mouseEvent(
@@ -1116,15 +1061,6 @@ struct LibraryContentView: View {
                     pressure: 0
                 ) {
                     panel.postEvent(dummyEvent, atStart: true)
-                }
-            }
-        }
-        .onChange(of: totalLibraryHeight) { _, newHeight in
-            let windowHeight = min(newHeight + 85, 440)
-            if windowHeight > currentLibraryWindowHeight {
-                currentLibraryWindowHeight = windowHeight
-                if let panel = LibraryWindowManager.shared.panel, panel.isPresented {
-                    panel.verticallyResize(to: windowHeight, animate: false)
                 }
             }
         }

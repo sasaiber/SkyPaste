@@ -1,0 +1,8 @@
+"Application" = "Uygulama:";
+"FirstCopyTime" = "İlk kopyalama zamanı:";
+"LastCopyTime" = "Son kopyalama zamanı:";
+"NumberOfCopies" = "Kopya sayısı:";
+"PinKey" = "İğnelemek için {pinKey}'a basın.";
+"UnpinKey" = "Kaldırmak için {pinKey}'a basın.";
+"DeleteKey" = "Silmek için {deleteKey}'a basın.";
+"PreviewKey" = "Önizlemeyi değiştirmek için {previewKey} tuşuna basın.";

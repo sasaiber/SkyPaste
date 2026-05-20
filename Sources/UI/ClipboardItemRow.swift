@@ -24,6 +24,7 @@ struct ClipboardItemRow: View {
     
     @State private var selectedURLs: Set<URL> = []
     @State private var innerHoveredURL: URL? = nil
+    @State private var isSystemMenuOpen = false
     
     @AppStorage("hkPinKey") private var hkPinKey: String = "p"
     @AppStorage("hkPinModifiers") private var hkPinModifiers: Int = Int(NSEvent.ModifierFlags.command.rawValue)
@@ -173,7 +174,7 @@ struct ClipboardItemRow: View {
                     self.isPopoverHovered = popoverHovered
                     if popoverHovered {
                         storage.hoveredItemID = item.id
-                    } else if !self.isHovered {
+                    } else if !self.isHovered && !isSystemMenuOpen {
                         self.showFullText = false
                     }
                 }
@@ -216,7 +217,7 @@ struct ClipboardItemRow: View {
                 } else {
                     // Mouse left entirely, use the timer gap for the popover bridge
                     let task = DispatchWorkItem {
-                        if !self.isPopoverHovered {
+                        if !self.isPopoverHovered && !self.isSystemMenuOpen {
                             self.showFullText = false
                         }
                     }
@@ -224,6 +225,12 @@ struct ClipboardItemRow: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: task)
                 }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSMenu.didBeginTrackingNotification)) { _ in
+            isSystemMenuOpen = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSMenu.didEndTrackingNotification)) { _ in
+            isSystemMenuOpen = false
         }
     }
     
@@ -317,26 +324,11 @@ struct ClipboardItemRow: View {
                                                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
                                                 .lineLimit(1)
                                             
-                                            HStack(spacing: 4) {
-                                                Text(url.path)
-                                                    .font(.system(size: 10, design: .monospaced))
-                                                    .foregroundColor(.secondary)
-                                                    .truncationMode(.middle)
-                                                    .lineLimit(1)
-                                                
-                                                Spacer(minLength: 10)
-                                                
-                                                Button(action: {
-                                                    NSPasteboard.general.clearContents()
-                                                    NSPasteboard.general.writeObjects([url as NSURL])
-                                                }) {
-                                                    Image(systemName: "doc.on.clipboard")
-                                                        .font(.system(size: 12))
-                                                }
-                                                .buttonStyle(.plain)
-                                                .foregroundColor(.accentColor)
-                                                .help("Copy file")
-                                            }
+                                             Text(url.path)
+                                                 .font(.system(size: 10, design: .monospaced))
+                                                 .foregroundColor(.secondary)
+                                                 .truncationMode(.middle)
+                                                 .lineLimit(1)
                                         }
                                     }
                                     .padding(.vertical, 4)
@@ -346,8 +338,13 @@ struct ClipboardItemRow: View {
                                         (innerHoveredURL == url ? Color.secondary.opacity(0.1) : Color.clear)
                                     )
                                     .cornerRadius(8)
-                                    .contentShape(Rectangle())
-                                    .onHover { h in
+                                     .contentShape(Rectangle())
+                                     .onCopyCommand {
+                                         copyFileToPasteboard([url])
+                                         let provider = NSItemProvider(object: url as NSURL)
+                                         return [provider]
+                                     }
+                                     .onHover { h in
                                         if h { 
                                             innerHoveredURL = url 
                                             storage.popoverHoveredURL = url
@@ -362,32 +359,40 @@ struct ClipboardItemRow: View {
                                             if storage.popoverHoveredURL == url { storage.popoverHoveredURL = nil }
                                         }
                                     }
-                                    .onTapGesture {
-                                        let flags = NSEvent.modifierFlags
-                                        if flags.contains(.command) {
+                                     .onTapGesture {
+                                         let flags = NSEvent.modifierFlags
+                                         if flags.contains(.command) {
+                                             // ⌘+Click: Select ONLY this one file (single selection)
+                                             selectedURLs = [url]
+                                             storage.popoverSelectedURLs = [url]
+                                         } else if flags.contains(.shift) {
+                                            // ⇧+Click: Toggle Select
                                             if selectedURLs.contains(url) { selectedURLs.remove(url) }
                                             else { selectedURLs.insert(url) }
-                                        } else if flags.contains(.shift) {
-                                            if selectedURLs.contains(url) { selectedURLs.remove(url) }
-                                            else { selectedURLs.insert(url) }
+                                            storage.popoverSelectedURLs = Array(selectedURLs)
                                         } else {
-                                            if isImageURL(url) {
-                                                onImageTap?(url)
-                                            }
+                                            // Normal Click: Copy and Paste (or just copy if auto-paste is disabled)
                                             selectedURLs = [url]
+                                            storage.popoverSelectedURLs = Array(selectedURLs)
+                                            
+                                             // Copy file URL to pasteboard
+                                             copyFileToPasteboard([url])
+                                            
+                                            // Auto-paste if active
+                                            if UserDefaults.standard.bool(forKey: "autoPasteActive") {
+                                                AppDelegate.shared.monitorRef?.triggerCmdV()
+                                                WindowManager.shared.close()
+                                            }
                                         }
-                                        storage.popoverSelectedURLs = Array(selectedURLs)
                                     }
                                     .contextMenu {
                                         let isMulti = selectedURLs.count > 1
                                         let urlsToActOn = selectedURLs.isEmpty ? [url] : (selectedURLs.contains(url) ? Array(selectedURLs) : [url])
                                         let isFullSelection = urlsToActOn.count == urls.count
                                         
-                                        Button(action: {
-                                            let pboard = NSPasteboard.general
-                                            pboard.clearContents()
-                                            pboard.writeObjects(urlsToActOn as [NSURL])
-                                        }) {
+                                         Button(action: {
+                                             copyFileToPasteboard(urlsToActOn)
+                                         }) {
                                             Text(isMulti ? "Copy \(urlsToActOn.count) Files" : "Copy File")
                                             Image(systemName: "doc.on.clipboard")
                                         }
@@ -464,8 +469,18 @@ struct ClipboardItemRow: View {
                             .padding(.horizontal, 6)
                             .padding(.bottom, 6)
                         }
-                        .frame(maxHeight: 400)
+                         .frame(maxHeight: 400)
                     }
+                    
+                    // Hidden handler for system Cmd+C in preview popover (SwiftUI keyboardShortcut pattern)
+                    Button {
+                        let target: [URL] = selectedURLs.isEmpty ? (innerHoveredURL != nil ? [innerHoveredURL!] : []) : Array(selectedURLs)
+                        if !target.isEmpty { copyFileToPasteboard(target) }
+                    } label: {
+                        EmptyView()
+                    }
+                    .keyboardShortcut(KeyEquivalent("c"), modifiers: [.command])
+                    .hidden()
                 }
             } else {
                 ScrollView {
@@ -479,6 +494,15 @@ struct ClipboardItemRow: View {
     }
     
     // Helpers
+    private func copyFileToPasteboard(_ urls: [URL]) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.writeObjects(urls as [NSURL])
+        let legacy = NSPasteboard.PasteboardType("NSFilenamesPboardType")
+        pb.addTypes([legacy], owner: nil)
+        pb.setPropertyList(urls.map { $0.path }, forType: legacy)
+    }
+    
     private func isImageURL(_ url: URL?) -> Bool {
         guard let url = url else { return false }
         let ext = url.pathExtension.lowercased()
