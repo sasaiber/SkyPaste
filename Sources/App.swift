@@ -48,6 +48,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         NSApp.setActivationPolicy(.accessory)
         self.globalStore = Storage()
         
+        UserDefaults.standard.register(defaults: [
+            "SUEnableAutomaticChecks": true,
+            "SUScheduledCheckInterval": 86400,
+            "SUAutomaticallyUpdate": false
+        ])
+        
         self.updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
         
         self.statusBarItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)

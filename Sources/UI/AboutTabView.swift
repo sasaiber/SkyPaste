@@ -1,7 +1,47 @@
 import SwiftUI
 import AppKit
+import Sparkle
+
+enum UpdateFrequency: Int, CaseIterable, Identifiable {
+    case off = 0
+    case daily = 86400
+    case every3Days = 259200
+    case weekly = 604800
+    
+    var id: Int { self.rawValue }
+    
+    var title: String {
+        switch self {
+        case .off: return "Off"
+        case .daily: return "Every Day"
+        case .every3Days: return "Every 3 Days"
+        case .weekly: return "Every Week"
+        }
+    }
+}
 
 struct AboutTabView: View {
+    @AppStorage("SUEnableAutomaticChecks") private var enableAutomaticChecks: Bool = true
+    @AppStorage("SUScheduledCheckInterval") private var scheduledCheckInterval: Int = 86400
+    @AppStorage("SUAutomaticallyUpdate") private var automaticallyUpdate: Bool = false
+    
+    private var frequency: Binding<UpdateFrequency> {
+        Binding(
+            get: {
+                if !self.enableAutomaticChecks { return .off }
+                return UpdateFrequency(rawValue: self.scheduledCheckInterval) ?? .daily
+            },
+            set: { newValue in
+                if newValue == .off {
+                    self.enableAutomaticChecks = false
+                } else {
+                    self.enableAutomaticChecks = true
+                    self.scheduledCheckInterval = newValue.rawValue
+                }
+            }
+        )
+    }
+    
     private var appIcon: NSImage {
         if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
            let img = NSImage(contentsOf: url) {
@@ -51,9 +91,16 @@ struct AboutTabView: View {
                     .font(.headline)
                 
                 HStack {
-                    Text("Automatically checks for updates in the background.")
+                    Text("Check for updates:")
                         .font(.body)
-                        .foregroundColor(.secondary)
+                    
+                    Picker("", selection: frequency) {
+                        ForEach(UpdateFrequency.allCases) { option in
+                            Text(option.title).tag(option)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 120)
                     
                     Spacer()
                     
@@ -64,6 +111,10 @@ struct AboutTabView: View {
                         Text("Check Now")
                     }
                 }
+                
+                Toggle("Automatically download and install updates", isOn: $automaticallyUpdate)
+                    .font(.body)
+                    .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             
