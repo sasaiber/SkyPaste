@@ -1,8 +1,0 @@
-"Application" = "יישום:";
-"FirstCopyTime" = "מועד ההעתקה הראשונה:";
-"LastCopyTime" = "מועד ההעתקה האחרונה:";
-"NumberOfCopies" = "מספר העותקים:";
-"PinKey" = "יש ללחוץ על {pinKey} כדי לנעוץ / לשחרר.";
-"UnpinKey" = "יש ללחוץ על {pinKey} כדי לנעוץ / לשחרר.";
-"DeleteKey" = "יש ללחוץ על {deleteKey} כדי למחוק.";
-"PreviewKey" = "לחץ על {previewKey} כדי להחליף תצוגה מקדימה.";
