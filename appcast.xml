@@ -2,19 +2,25 @@
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
     <channel>
         <title>SkyPaste Updates</title>
-        <!-- Replace values below when releasing version 1.1 -->
-        <!-- 
+        
         <item>
-            <title>Version 1.1</title>
-            <sparkle:releaseNotesLink>https://github.com/sasaiber/SkyPaste/releases/tag/v1.1</sparkle:releaseNotesLink>
-            <pubDate>Wed, 20 May 2026 12:00:00 +0000</pubDate>
-            <enclosure url="https://github.com/sasaiber/SkyPaste/releases/download/v1.1/SkyPaste.zip"
-                       sparkle:version="1.1"
-                       sparkle:shortVersionString="1.1"
-                       sparkle:edSignature="SIGNATURE_HERE"
-                       length="FILE_SIZE_HERE"
+            <title>Version 1.0.1</title>
+            <sparkle:releaseNotesLink>https://github.com/sasaiber/SkyPaste/releases/tag/v1.0.1</sparkle:releaseNotesLink>
+            <pubDate>Thu, 04 Jul 2024 12:00:00 +0000</pubDate>
+            <description><![CDATA[
+<ul>
+<li>Auto UPD added</li>
+<li>Fixes</li>
+<li>Folder Library</li>
+</ul>
+            ]]></description>
+            <enclosure url="https://github.com/sasaiber/SkyPaste/releases/download/v1.0.1/SkyPaste.zip"
+                       sparkle:version="1.0.1"
+                       sparkle:shortVersionString="1.0.1"
+                       sparkle:edSignature="AvMSXUv1d4W7MRbn6+wMo2NdFo8DVQmFCM9ouu/QgHyXRGwLTEB9G5X1yWcGsmfkDHwRQG7X5Y1WDkhIYWLcDQ=="
+                       length="4123645"
                        type="application/octet-stream" />
         </item>
-        -->
+
     </channel>
 </rss>
