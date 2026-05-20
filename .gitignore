@@ -32,7 +32,7 @@ clip.mp3
 AppIcon.icns
 AppIcon.jpeg
 Swift-*.swiftmodule
-Maccy-2.6.1/
+Maccy
 .vscode/
 GEMINI.md
 AGENTS.md
@@ -44,3 +44,6 @@ AGENTS.md
 
 # Package dependencies (if using resolved)
 Package.resolved
+
+# Sparkle tools
+sparkle_bin/
