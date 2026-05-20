@@ -32,10 +32,25 @@ clip.mp3
 AppIcon.icns
 AppIcon.jpeg
 Swift-*.swiftmodule
-Maccy
+Maccy/
+Maccy-2.6.1/
 .vscode/
 GEMINI.md
 AGENTS.md
+
+# AI Agents & Temp folders
+.agents/
+.antigravitycli/
+.github/
+.kilo/
+graphify-out/
+.graphifyignore
+
+# Temp scripts & tasks
+clipboard_media_task.md
+fix_mainview.py
+sparkle_bin/
+UPDATE_INSTRUCTIONS.md
 
 # Large generated files
 *.app
@@ -44,17 +59,3 @@ AGENTS.md
 
 # Package dependencies (if using resolved)
 Package.resolved
-
-# Sparkle tools
-sparkle_bin/
-
-# AI Agents & Temp folders
-.agents/
-.antigravitycli/
-.github/
-.kilo/
-graphify-out/
-
-# Temp scripts & tasks
-clipboard_media_task.md
-fix_mainview.py
