@@ -47,3 +47,14 @@ Package.resolved
 
 # Sparkle tools
 sparkle_bin/
+
+# AI Agents & Temp folders
+.agents/
+.antigravitycli/
+.github/
+.kilo/
+graphify-out/
+
+# Temp scripts & tasks
+clipboard_media_task.md
+fix_mainview.py
