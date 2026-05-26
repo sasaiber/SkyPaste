@@ -54,7 +54,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             "SUAutomaticallyUpdate": false
         ])
         
-        self.updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+        self.updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil)
         
         // Sync Sparkle configuration with UserDefaults explicitly at launch
         let updater = self.updaterController.updater
@@ -203,6 +203,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         if !FileManager.default.fileExists(atPath: Self.setupMarkerURL.path) {
             showWelcomeWindow()
         }
+        
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        checkAndShowWhatsNew(currentVersion: currentVersion)
     }
     
     private func setupNotificationDelegate() {
@@ -590,5 +593,38 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
+    }
+
+    func checkAndShowWhatsNew(currentVersion: String) {
+        let lastVersion = UserDefaults.standard.string(forKey: "LastRunVersion")
+        
+        if let last = lastVersion, last != currentVersion {
+            // App was updated in the background
+            let alert = NSAlert()
+            alert.messageText = "SkyPaste successfully updated to version \(currentVersion)!"
+            alert.informativeText = "The update was installed successfully.\n\nWould you like to see what's new in this release?"
+            alert.addButton(withTitle: "View Changes on GitHub")
+            alert.addButton(withTitle: "Close")
+            
+            NSApp.activate(ignoringOtherApps: true)
+            let response = alert.runModal()
+            if response == .alertFirstButtonReturn {
+                if let url = URL(string: "https://github.com/sasaiber/SkyPaste/releases/latest") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+        }
+        UserDefaults.standard.set(currentVersion, forKey: "LastRunVersion")
+    }
+}
+
+extension AppDelegate: SPUUpdaterDelegate {
+    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        Task { @MainActor in
+            if !updater.automaticallyDownloadsUpdates {
+                // Force the app to become active so the Sparkle prompt is immediately visible
+                NSApp.activate(ignoringOtherApps: true)
+            }
+        }
     }
 }
