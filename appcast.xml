@@ -4,6 +4,22 @@
         <title>SkyPaste Updates</title>
         
         <item>
+            <title>Version 1.0.4</title>
+            <pubDate>Tue, 26 May 2026 12:00:00 +0000</pubDate>
+            <description><![CDATA[
+<ul>
+<li>New features: pinned posts, filters, and improved RAM usage.</li>
+</ul>
+            ]]></description>
+            <enclosure url="https://github.com/sasaiber/SkyPaste/releases/download/1.0.4/SkyPaste.zip"
+                       sparkle:version="1.0.4"
+                       sparkle:shortVersionString="1.0.4"
+                       sparkle:edSignature="uqyHOiV9SeV8xap6J/ynMfTJUGyuMctX9515sI9PqVeonZtX/vxYFKrNiX+sghZE9DZH6/Eg1vUZ1TXeZ/HZBQ=="
+                       length="3688924"
+                       type="application/octet-stream" />
+        </item>
+        
+        <item>
             <title>Version 1.0.3</title>
             <pubDate>Thu, 04 Jul 2024 12:00:00 +0000</pubDate>
             <description><![CDATA[
