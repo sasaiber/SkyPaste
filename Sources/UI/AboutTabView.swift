@@ -34,9 +34,12 @@ struct AboutTabView: View {
             set: { newValue in
                 if newValue == .off {
                     self.enableAutomaticChecks = false
+                    AppDelegate.shared.updaterController.updater.automaticallyChecksForUpdates = false
                 } else {
                     self.enableAutomaticChecks = true
                     self.scheduledCheckInterval = newValue.rawValue
+                    AppDelegate.shared.updaterController.updater.automaticallyChecksForUpdates = true
+                    AppDelegate.shared.updaterController.updater.updateCheckInterval = TimeInterval(newValue.rawValue)
                 }
             }
         )
@@ -115,6 +118,9 @@ struct AboutTabView: View {
                 Toggle("Automatically download and install updates", isOn: $automaticallyUpdate)
                     .font(.body)
                     .foregroundColor(.secondary)
+                    .onChange(of: automaticallyUpdate) { _, newValue in
+                        AppDelegate.shared.updaterController.updater.automaticallyDownloadsUpdates = newValue
+                    }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             
