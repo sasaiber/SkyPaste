@@ -12,6 +12,10 @@ enum ThumbStatus: String, Codable {
 
 final class ThumbnailGenerator: @unchecked Sendable {
     static let shared = ThumbnailGenerator()
+
+    private let imageExts = Set(["jpg", "jpeg", "png", "gif", "webp", "heic", "svg", "bmp", "tiff", "raw"])
+    private let videoExts = Set(["mp4", "mov", "avi", "mkv", "m4v", "webm"])
+    private let docExts = Set(["pdf", "docx", "xlsx", "pptx", "pages", "numbers"])
     
     private let queue: OperationQueue = {
         let q = OperationQueue()
@@ -37,22 +41,31 @@ final class ThumbnailGenerator: @unchecked Sendable {
     
     func generateThumbnail(for url: URL) async -> (URL?, ThumbStatus) {
         let ext = url.pathExtension.lowercased()
-        let pathData = url.path.data(using: .utf8) ?? Data()
-        let identifier = pathData.base64EncodedString()
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "=", with: "")
-        
-        let thumbURL = thumbsDirectory.appendingPathComponent("\(identifier).jpg")
-        
+        let thumbURL = thumbnailURL(for: url)
+
         if FileManager.default.fileExists(atPath: thumbURL.path) {
             return (thumbURL, .ok)
         }
-        
+
+        if imageExts.contains(ext) || videoExts.contains(ext) {
+            return await withCheckedContinuation { continuation in
+                queue.addOperation {
+                    autoreleasepool {
+                        let result = self.createThumbnailSync(for: url, thumbURL: thumbURL, ext: ext, isBatteryPowered: self.isOnBattery)
+                        continuation.resume(returning: result)
+                    }
+                }
+            }
+        }
+
+        if docExts.contains(ext), let result = await createDocumentThumbnail(for: url, thumbURL: thumbURL, ext: ext) {
+            return result
+        }
+
         return await withCheckedContinuation { continuation in
             queue.addOperation {
                 autoreleasepool {
-                    let result = self.createThumbnailSync(for: url, thumbURL: thumbURL, ext: ext, isBatteryPowered: self.isOnBattery)
+                    let result = self.createFallbackIconThumbnail(for: url, thumbURL: thumbURL)
                     continuation.resume(returning: result)
                 }
             }
@@ -60,22 +73,25 @@ final class ThumbnailGenerator: @unchecked Sendable {
     }
     
     func getExistingThumbnailURL(for url: URL) -> URL? {
-        let pathData = url.path.data(using: .utf8) ?? Data()
-        let identifier = pathData.base64EncodedString()
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "=", with: "")
-        let thumbURL = thumbsDirectory.appendingPathComponent("\(identifier).jpg")
-        
+        let thumbURL = thumbnailURL(for: url)
+
         if FileManager.default.fileExists(atPath: thumbURL.path) {
             return thumbURL
         }
         return nil
     }
+
+    private func thumbnailURL(for url: URL) -> URL {
+        let pathData = url.path.data(using: .utf8) ?? Data()
+        let identifier = pathData.base64EncodedString()
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "=", with: "")
+        return thumbsDirectory.appendingPathComponent("\(identifier).jpg")
+    }
     
     private func createThumbnailSync(for url: URL, thumbURL: URL, ext: String, isBatteryPowered: Bool) -> (URL?, ThumbStatus) {
         // IMAGES
-        let imageExts = ["jpg", "jpeg", "png", "gif", "webp", "heic", "svg", "bmp", "tiff", "raw"]
         if imageExts.contains(ext) {
             guard let image = NSImage(contentsOf: url) else { return (nil, .failed) }
             if let data = self.resizeAndCompress(image: image, maxDimension: 200) {
@@ -86,9 +102,8 @@ final class ThumbnailGenerator: @unchecked Sendable {
             }
             return (nil, .failed)
         }
-        
+
         // VIDEO
-        let videoExts = ["mp4", "mov", "avi", "mkv", "m4v", "webm"]
         if videoExts.contains(ext) {
             if isBatteryPowered {
                 // If on battery, delay for 5 seconds to avoid sudden spikes when copying
@@ -110,46 +125,52 @@ final class ThumbnailGenerator: @unchecked Sendable {
             }
             return (nil, .failed)
         }
-        
-        // DOCUMENTS / PDF
-        let docExts = ["pdf", "docx", "xlsx", "pptx", "pages", "numbers"]
-        if docExts.contains(ext) {
-            if ext == "pdf", let pdf = PDFDocument(url: url), let page = pdf.page(at: 0) {
-                let image = page.thumbnail(of: CGSize(width: 200, height: 200), for: .mediaBox)
-                if let data = self.resizeAndCompress(image: image, maxDimension: 200) {
-                    try? data.write(to: thumbURL)
-                    return (thumbURL, .ok)
-                }
-            }
-            
-            // Fallback to QLThumbnailGenerator
-            let size = CGSize(width: 200, height: 200)
-            let request = QLThumbnailGenerator.Request(fileAt: url, size: size, scale: 1.0, representationTypes: .thumbnail)
-            let group = DispatchGroup()
-            group.enter()
-            var thumbData: Data? = nil
-            QLThumbnailGenerator.shared.generateRepresentations(for: request) { thumbnail, type, error in
-                if let cgImage = thumbnail?.cgImage {
-                    let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: CGFloat(cgImage.width), height: CGFloat(cgImage.height)))
-                    thumbData = self.resizeAndCompress(image: nsImage, maxDimension: 200)
-                }
-                group.leave()
-            }
-            group.wait()
-            if let data = thumbData {
-                try? data.write(to: thumbURL)
-                return (thumbURL, .ok)
-            }
-        }
-        
-        // EVERYTHING ELSE (fallback)
+
+        return createFallbackIconThumbnail(for: url, thumbURL: thumbURL)
+    }
+
+    private func createFallbackIconThumbnail(for url: URL, thumbURL: URL) -> (URL?, ThumbStatus) {
         let icon = NSWorkspace.shared.icon(forFile: url.path)
         if let data = self.resizeAndCompress(image: icon, maxDimension: 200) {
             try? data.write(to: thumbURL)
             return (thumbURL, .ok)
         }
-        
+
         return (nil, .failed)
+    }
+
+    private func createDocumentThumbnail(for url: URL, thumbURL: URL, ext: String) async -> (URL?, ThumbStatus)? {
+        if ext == "pdf", let pdf = PDFDocument(url: url), let page = pdf.page(at: 0) {
+            let image = page.thumbnail(of: CGSize(width: 200, height: 200), for: .mediaBox)
+            if let data = self.resizeAndCompress(image: image, maxDimension: 200) {
+                try? data.write(to: thumbURL)
+                return (thumbURL, .ok)
+            }
+        }
+
+        let size = CGSize(width: 200, height: 200)
+        let request = QLThumbnailGenerator.Request(fileAt: url, size: size, scale: 1.0, representationTypes: .thumbnail)
+
+        if let data = await generateQuickLookData(for: request) {
+            try? data.write(to: thumbURL)
+            return (thumbURL, .ok)
+        }
+
+        return nil
+    }
+
+    private func generateQuickLookData(for request: QLThumbnailGenerator.Request) async -> Data? {
+        await withCheckedContinuation { continuation in
+            QLThumbnailGenerator.shared.generateRepresentations(for: request) { thumbnail, _, _ in
+                guard let cgImage = thumbnail?.cgImage else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: CGFloat(cgImage.width), height: CGFloat(cgImage.height)))
+                let data = self.resizeAndCompress(image: nsImage, maxDimension: 200)
+                continuation.resume(returning: data)
+            }
+        }
     }
     
     private func resizeAndCompress(image: NSImage, maxDimension: CGFloat) -> Data? {

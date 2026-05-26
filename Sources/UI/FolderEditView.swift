@@ -9,9 +9,16 @@ struct FolderEditView: View {
     @State private var editedEmoji: String
     @State private var editedColor: Color
     @State private var appBundleIDs: [String]
+    @State private var editedStackPinned: Bool
+    @State private var editedStackThreshold: Int
     
     @State private var newBundleID = ""
     @State private var showingAppPicker = false
+
+    @State private var nameError: String?
+    @State private var bindingConflictError: String?
+
+    private var hasErrors: Bool { nameError != nil }
     
     init(folder: AppFolder, storage: Storage) {
         self.folder = folder
@@ -24,6 +31,8 @@ struct FolderEditView: View {
             _editedColor = State(initialValue: .accentColor)
         }
         _appBundleIDs = State(initialValue: folder.appBundleIDs)
+        _editedStackPinned = State(initialValue: folder.stackPinned)
+        _editedStackThreshold = State(initialValue: folder.stackThreshold)
     }
     
     var body: some View {
@@ -46,6 +55,40 @@ struct FolderEditView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     identitySection
+                    VStack(spacing: 8) {
+                        Toggle(isOn: $editedStackPinned) {
+                            HStack {
+                                Image(systemName: "square.on.square")
+                                    .foregroundColor(.accentColor)
+                                Text("Stack pinned items")
+                            }
+                        }
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        
+                        if editedStackPinned {
+                            HStack {
+                                Text("Min items:")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                TextField("", value: $editedStackThreshold, format: .number)
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(width: 50)
+                                    .multilineTextAlignment(.trailing)
+                                    .controlSize(.small)
+                                Stepper(value: $editedStackThreshold, in: 2...99) {
+                                    EmptyView()
+                                }
+                                .controlSize(.small)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color(.textBackgroundColor))
+                    .cornerRadius(12)
+                    
                     appBindingsSection
                 }
                 .padding(.horizontal)
@@ -59,17 +102,23 @@ struct FolderEditView: View {
                     .keyboardShortcut(.cancelAction)
                 Spacer()
                 Button("Save") {
+                    if storage.folderNameExists(editedName, excluding: folder.id) {
+                        nameError = "A folder with this name already exists."
+                        return
+                    }
                     var updated = folder
                     updated.name = editedName.isEmpty ? folder.name : editedName
                     updated.emoji = editedEmoji.isEmpty ? "📁" : editedEmoji
                     updated.colorHex = editedColor.toHex()
                     updated.appBundleIDs = appBundleIDs
+                    updated.stackPinned = editedStackPinned
+                    updated.stackThreshold = editedStackThreshold
                     storage.updateFolder(updated)
                     dismiss()
                 }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
-                .disabled(editedName.isEmpty)
+                .disabled(editedName.isEmpty || hasErrors)
             }
             .padding(.horizontal)
             .padding(.vertical, 12)
@@ -80,8 +129,20 @@ struct FolderEditView: View {
         }
         .onChange(of: newBundleID) { _, newValue in
             if !newValue.isEmpty, !appBundleIDs.contains(newValue) {
-                appBundleIDs.append(newValue)
+                if let conflict = storage.folder(withBundleID: newValue, excluding: folder.id) {
+                    bindingConflictError = "Already bound to \"\(conflict.name)\""
+                } else {
+                    bindingConflictError = nil
+                    appBundleIDs.append(newValue)
+                }
                 newBundleID = ""
+            }
+        }
+        .onChange(of: editedName) { _, newValue in
+            if !newValue.isEmpty, storage.folderNameExists(newValue, excluding: folder.id) {
+                nameError = "A folder with this name already exists."
+            } else {
+                nameError = nil
             }
         }
     }
@@ -98,7 +159,10 @@ struct FolderEditView: View {
                     TextField("Folder name", text: $editedName)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 14, weight: .medium))
-                    
+                    if let err = nameError {
+                        Text(err)
+                            .font(.caption2).foregroundColor(.red)
+                    }
                     HStack(spacing: 12) {
                         Text("Color:")
                             .font(.system(size: 12, weight: .medium))
@@ -177,6 +241,10 @@ struct FolderEditView: View {
             }
             .buttonStyle(.plain)
             .padding(.top, 4)
+            if let err = bindingConflictError {
+                Text(err)
+                    .font(.caption2).foregroundColor(.red)
+            }
         }
         .padding(14)
         .background(Color(.textBackgroundColor))
@@ -184,12 +252,14 @@ struct FolderEditView: View {
     }
     
     private func appName(for bundleID: String) -> String {
-        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-            let path = url.deletingLastPathComponent().lastPathComponent
-            return path.hasSuffix(".app") ? String(path.dropLast(4)) : url.lastPathComponent
-        }
-        return bundleID
+        NSWorkspace.shared.appDisplayName(forBundleID: bundleID)
     }
+}
+
+struct InstalledApp: Hashable {
+    let name: String
+    let bundleID: String
+    let iconPath: String
 }
 
 struct AppPickerView: View {
@@ -197,9 +267,11 @@ struct AppPickerView: View {
     @Environment(\.dismiss) var dismiss
     
     @State private var searchText = ""
-    @State private var installedApps: [(name: String, bundleID: String, icon: NSImage)] = []
+    @State private var installedApps: [InstalledApp] = []
+    @State private var loadedIcons: [String: NSImage] = [:]
+    private let loadedIconsSoftLimit: Int = 160
     
-    var filteredApps: [(name: String, bundleID: String, icon: NSImage)] {
+    private var filteredApps: [InstalledApp] {
         if searchText.isEmpty { return installedApps }
         return installedApps.filter {
             $0.name.localizedCaseInsensitiveContains(searchText) ||
@@ -226,7 +298,7 @@ struct AppPickerView: View {
                     dismiss()
                 }) {
                     HStack(spacing: 8) {
-                        Image(nsImage: app.icon)
+                        Image(nsImage: icon(for: app))
                             .resizable()
                             .scaledToFit()
                             .frame(width: 20, height: 20)
@@ -244,6 +316,7 @@ struct AppPickerView: View {
         }
         .frame(width: 350, height: 400)
         .onAppear { loadApps() }
+        .onDisappear { loadedIcons.removeAll() }
     }
     
     private func loadApps() {
@@ -255,7 +328,7 @@ struct AppPickerView: View {
                 NSHomeDirectory() + "/Applications"
             ]
             
-            var apps: [(name: String, bundleID: String, icon: NSImage)] = []
+            var apps: [InstalledApp] = []
             let fm = FileManager.default
             
             for dirPath in appDirs {
@@ -271,18 +344,17 @@ struct AppPickerView: View {
                         let infoPlist = fileURL.appendingPathComponent("Contents/Info.plist")
                         if let plist = NSDictionary(contentsOf: infoPlist),
                            let bundleID = plist["CFBundleIdentifier"] as? String {
-                            let name = (plist["CFBundleName"] as? String) 
-                                ?? (plist["CFBundleDisplayName"] as? String) 
+                            let name = (plist["CFBundleName"] as? String)
+                                ?? (plist["CFBundleDisplayName"] as? String)
                                 ?? fileURL.deletingPathExtension().lastPathComponent
-                            let icon = NSWorkspace.shared.icon(forFile: fileURL.path)
-                            apps.append((name: name, bundleID: bundleID, icon: icon))
+                            apps.append(InstalledApp(name: name, bundleID: bundleID, iconPath: fileURL.path))
                         }
                     }
                 }
             }
             
             // De-duplicate by bundleID
-            var uniqueApps: [String: (name: String, bundleID: String, icon: NSImage)] = [:]
+            var uniqueApps: [String: InstalledApp] = [:]
             for app in apps {
                 uniqueApps[app.bundleID] = app
             }
@@ -292,5 +364,20 @@ struct AppPickerView: View {
                 self.installedApps = sortedApps
             }
         }
+    }
+
+    private func icon(for app: InstalledApp) -> NSImage {
+        if let cached = loadedIcons[app.iconPath] {
+            return cached
+        }
+
+        if loadedIcons.count >= loadedIconsSoftLimit,
+           let firstKey = loadedIcons.keys.first {
+            loadedIcons.removeValue(forKey: firstKey)
+        }
+
+        let icon = NSWorkspace.shared.icon(forFile: app.iconPath)
+        loadedIcons[app.iconPath] = icon
+        return icon
     }
 }

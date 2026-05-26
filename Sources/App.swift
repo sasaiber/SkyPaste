@@ -70,6 +70,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         HotkeyManager.shared.onToggleRequested = { [weak self] in
             guard let self = self else { return }
+            self.globalStore.showPinnedOnly = false
             if !WindowManager.shared.isWindowVisible {
                 self.resolveFolderForActiveApp()
             }
@@ -102,6 +103,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         HotkeyManager.shared.onFolderShortcutRequested = { [weak self] folderID in
             guard let self = self else { return }
             if self.globalStore.folders.contains(where: { $0.id == folderID }) {
+                self.globalStore.showPinnedOnly = false
+                if WindowManager.shared.isWindowVisible && self.globalStore.selectedFolderID == folderID {
+                    WindowManager.shared.close()
+                    return
+                }
                 self.globalStore.selectedFolderID = folderID
                 if !WindowManager.shared.isWindowVisible {
                     self.togglePopover(nil)
@@ -122,6 +128,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             guard let self = self else { return }
             let position = UserDefaults.standard.string(forKey: "popupPosition") ?? "cursor"
             LibraryWindowManager.shared.toggle(storage: self.globalStore, position: position)
+        }
+        
+        HotkeyManager.shared.onPinnedOnlyRequested = { [weak self] in
+            guard let self = self else { return }
+            if self.globalStore.showPinnedOnly && WindowManager.shared.isWindowVisible {
+                self.globalStore.showPinnedOnly = false
+                WindowManager.shared.close()
+                return
+            }
+            self.globalStore.showPinnedOnly = true
+            self.globalStore.selectedFolderID = nil
+            self.togglePopover(nil)
         }
         
         HotkeyManager.shared.start()
@@ -153,6 +171,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             "hkFolderModifiers": Int(NSEvent.ModifierFlags.command.rawValue),
             "hkLibraryKey": "a",
             "hkLibraryModifiers": Int(NSEvent.ModifierFlags.option.rawValue),
+            "hkPinnedOnlyKey": "p",
+            "hkPinnedOnlyModifiers": Int(NSEvent.ModifierFlags.option.rawValue),
         ])
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             if settings.authorizationStatus == .notDetermined {
@@ -263,11 +283,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         if WindowManager.shared.isWindowVisible {
             WindowManager.shared.close()
         } else {
+            // Close library panel if open
+            LibraryWindowManager.shared.close()
             self.previousApp = NSWorkspace.shared.frontmostApplication
             
             // If sender is present (e.g. status bar button click or menu click),
             // dynamically resolve folder based on active app before opening popover
             if sender != nil {
+                self.globalStore.showPinnedOnly = false
                 if let bundleID = self.previousApp?.bundleIdentifier,
                    let matchingFolder = self.globalStore.folders.first(where: { $0.appBundleIDs.contains(bundleID) }) {
                     self.globalStore.selectedFolderID = matchingFolder.id
@@ -289,7 +312,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             if let view = self.popupHostingView {
 
                 
-                let size = NSSize(width: 400, height: 520)
+                let size = NSSize(width: 430, height: 520)
                 WindowManager.shared.show(contentView: view, size: size, at: position, button: button)
             }
             
@@ -500,7 +523,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             .appendingPathComponent("SkyPaste/Images")
         
         guard let currentItems = globalStore?.items else { return }
-        let referencedURLs = Set(currentItems.compactMap { $0.fileURL?.lastPathComponent })
+        
+        var referencedURLs = Set<String>()
+        for item in currentItems {
+            if item.type == .image || item.type == .file {
+                if let content = item.textContent {
+                    let urls = content.components(separatedBy: "\n").filter { !$0.isEmpty }.compactMap { URL(string: $0) }
+                    for url in urls {
+                        referencedURLs.insert(url.lastPathComponent)
+                    }
+                } else if let url = item.fileURL {
+                    referencedURLs.insert(url.lastPathComponent)
+                }
+            }
+        }
         
         do {
             let files = try FileManager.default.contentsOfDirectory(at: imagesDir, includingPropertiesForKeys: nil)
@@ -510,6 +546,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 }
             }
         } catch {}
+        
+        // Thumbnails are recreated on demand. Skip thumbnail-directory scans on startup
+        // to reduce launch CPU/IO and battery impact.
     }
     
     private func resolveFolderForActiveApp() {

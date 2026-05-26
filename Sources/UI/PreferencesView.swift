@@ -16,6 +16,7 @@ struct PreferencesView: View {
                 Text("Shortcuts").tag(2)
                 Text("Storage").tag(3)
                 Text("Folders").tag(4)
+                Text("Ignore Apps").tag(6)
                 Text("About").tag(5)
             }
             .pickerStyle(.segmented)
@@ -26,6 +27,9 @@ struct PreferencesView: View {
             ScrollView {
                 if selectedTab == 4 {
                     FoldersTabWrapper(storage: storage)
+                        .padding(16)
+                } else if selectedTab == 6 {
+                    IgnoreAppsTabView()
                         .padding(16)
                 } else if selectedTab == 5 {
                     AboutTabView()
@@ -57,14 +61,16 @@ struct GeneralTabView: View {
     @AppStorage("showSpecialSymbols") private var showSpecialSymbols: Bool = true
     @AppStorage("disableMediaPreviews") private var disableMediaPreviews: Bool = false
     @AppStorage("unlimitedMediaPreviews") private var unlimitedMediaPreviews: Bool = true
+    @AppStorage("pinnedStackEnabled") private var pinnedStackEnabled: Bool = false
+    @AppStorage("pinnedStackMinItems") private var pinnedStackMinItems: Int = 2
     @AppStorage("maxPreviewsLimit") private var maxPreviewsLimit: Int = 10
     @AppStorage("saveText") private var saveText: Bool = true
     @AppStorage("saveImages") private var saveImages: Bool = true
     @AppStorage("saveLinks") private var saveLinks: Bool = true
     @AppStorage("saveFiles") private var saveFiles: Bool = true
-    
-    var body: some View {
-        Section("Startup") {
+    @AppStorage("syncEnabled") private var syncEnabled: Bool = true
+
+    var body: some View {        Section("Startup") {
             Toggle("Launch at Login", isOn: $launchAtLogin)
                 .onChange(of: launchAtLogin) { _, newValue in
                     UserDefaults.standard.set(newValue, forKey: "launchAtLoginEnabled")
@@ -124,12 +130,36 @@ struct GeneralTabView: View {
                 }
             }
             Toggle("Show special symbols (⏎ ⇥ etc.)", isOn: $showSpecialSymbols)
+            Toggle("Stack pinned items", isOn: $pinnedStackEnabled)
+                .help("Group pinned items into a collapsible stack at the top")
+            HStack {
+                Text("Min items in stack:")
+                    .foregroundColor(pinnedStackEnabled ? .primary : .secondary)
+                Spacer()
+                TextField("", value: $pinnedStackMinItems, format: .number)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 50)
+                    .multilineTextAlignment(.trailing)
+                    .controlSize(.small)
+                    .disabled(!pinnedStackEnabled)
+                Stepper(value: $pinnedStackMinItems, in: 2...99) {
+                    EmptyView()
+                }
+                .controlSize(.small)
+                .disabled(!pinnedStackEnabled)
+            }
         }
         Section("Content Types") {
             Toggle("Text & Rich Text", isOn: $saveText)
             Toggle("Images & Screenshots", isOn: $saveImages)
             Toggle("Web Links", isOn: $saveLinks)
             Toggle("Files & Folders", isOn: $saveFiles)
+        }
+        Section("Sync") {
+            Toggle("Universal Clipboard Sync", isOn: $syncEnabled)
+            Text("Content copied from your iPhone or iPad will appear in the shared buffer.")
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
         Section {
             Button("Grant Accessibility Permissions") { AppDelegate.shared.showWelcomeWindow() }
@@ -183,6 +213,8 @@ struct ShortcutsTabView: View {
     @AppStorage("hkFinderModifiers") private var hkFinderModifiers: Int = Int(NSEvent.ModifierFlags.command.rawValue | NSEvent.ModifierFlags.shift.rawValue)
     @AppStorage("hkLibraryKey") private var hkLibraryKey: String = "a"
     @AppStorage("hkLibraryModifiers") private var hkLibraryModifiers: Int = Int(NSEvent.ModifierFlags.option.rawValue)
+    @AppStorage("hkPinnedOnlyKey") private var hkPinnedOnlyKey: String = "p"
+    @AppStorage("hkPinnedOnlyModifiers") private var hkPinnedOnlyModifiers: Int = Int(NSEvent.ModifierFlags.option.rawValue)
     
     var body: some View {
         Section("Global Shortcuts") {
@@ -209,6 +241,9 @@ struct ShortcutsTabView: View {
             LabeledContent("Library (Folders):") {
                 ShortcutRecorder(actionName: "Library", keyString: $hkLibraryKey, modifiers: $hkLibraryModifiers)
             }
+            LabeledContent("Show Pinned Only:") {
+                ShortcutRecorder(actionName: "Show Pinned Only", keyString: $hkPinnedOnlyKey, modifiers: $hkPinnedOnlyModifiers)
+            }
             Text("Click any button to record a new combination.").font(.caption).foregroundColor(.secondary)
         }
     }
@@ -230,7 +265,10 @@ struct FoldersTabWrapper: View {
             editingFolder: $editingFolder,
             folderToDelete: $folderToDelete,
             showDeleteConfirmation: $showDeleteConfirmation,
-            onValidate: nil,
+            onValidate: { [storage] key, mod, actionName in
+                let type = actionName.hasPrefix("Open") ? "open" : "move"
+                return storage.shortcutConflictError(key: key, mod: mod, type: type, excludeID: nil, folders: storage.folders)
+            },
             onSaveShortcuts: {
                 let activeIDs = Set(storage.folders.map { $0.id })
                 let filteredShortcuts = folderShortcuts.filter { activeIDs.contains($0.key) }
@@ -300,6 +338,121 @@ struct FoldersTabWrapper: View {
         }
         .sheet(item: $editingFolder) { folder in
             FolderEditView(folder: folder, storage: storage)
+        }
+    }
+}
+
+struct IgnoreAppsTabView: View {
+    @State private var ignoredAppBundleIDs: [String] = []
+    @State private var showingAppPicker = false
+    @State private var newBundleID = ""
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Ignore Applications")
+                    .font(.headline)
+                
+                Text("Content copied from these applications will not be saved to your SkyPaste history.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.bottom, 4)
+            
+            ZStack {
+                Color(NSColor.textBackgroundColor)
+                    .opacity(0.5)
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
+                    )
+                
+                if ignoredAppBundleIDs.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "app.badge.slash")
+                            .font(.system(size: 28))
+                            .foregroundColor(.secondary.opacity(0.7))
+                        Text("No applications ignored.")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 40)
+                } else {
+                    List {
+                        ForEach(ignoredAppBundleIDs, id: \.self) { bundleID in
+                            HStack {
+                                if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+                                    let icon = NSWorkspace.shared.icon(forFile: url.path)
+                                    Image(nsImage: icon)
+                                        .resizable()
+                                        .frame(width: 24, height: 24)
+                                } else {
+                                    Image(systemName: "app.fill")
+                                        .resizable()
+                                        .frame(width: 24, height: 24)
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(NSWorkspace.shared.appDisplayName(forBundleID: bundleID))
+                                        .font(.system(size: 13, weight: .medium))
+                                    Text(bundleID)
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                Button(action: {
+                                    ignoredAppBundleIDs.removeAll { $0 == bundleID }
+                                    save()
+                                }) {
+                                    Image(systemName: "trash")
+                                        .foregroundColor(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                    .listStyle(.plain)
+                    .background(Color.clear)
+                }
+            }
+            .frame(maxHeight: .infinity)
+            
+            HStack {
+                Spacer()
+                Button(action: { showingAppPicker = true }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus")
+                        Text("Add Application...")
+                    }
+                }
+            }
+        }
+        .onAppear { load() }
+        .sheet(isPresented: $showingAppPicker) {
+            AppPickerView(selectedBundleID: $newBundleID)
+        }
+        .onChange(of: newBundleID) { _, newValue in
+            if !newValue.isEmpty, !ignoredAppBundleIDs.contains(newValue) {
+                ignoredAppBundleIDs.append(newValue)
+                save()
+                newBundleID = ""
+            }
+        }
+    }
+    
+    private func load() {
+        if let data = UserDefaults.standard.data(forKey: "ignoredAppBundleIDs"),
+           let decoded = try? JSONDecoder().decode([String].self, from: data) {
+            ignoredAppBundleIDs = decoded
+        }
+    }
+    
+    private func save() {
+        if let data = try? JSONEncoder().encode(ignoredAppBundleIDs) {
+            UserDefaults.standard.set(data, forKey: "ignoredAppBundleIDs")
         }
     }
 }

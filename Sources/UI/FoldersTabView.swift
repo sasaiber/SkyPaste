@@ -17,41 +17,6 @@ struct FoldersTabView: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Create New Folder")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
-                
-                HStack(spacing: 8) {
-                    EmojiPickerButton(emoji: $newFolderEmoji)
-                        .frame(width: 28, height: 28)
-                    
-                    NativeColorPicker(color: $newFolderColor, width: 28, height: 28)
-                        .frame(width: 28, height: 28)
-                    
-                    TextField("Folder name...", text: $newFolderName)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 200)
-                    
-                    Spacer()
-                    
-                    Button("Create") {
-                        storage.createFolder(name: newFolderName.isEmpty ? "New Folder" : newFolderName, emoji: newFolderEmoji.isEmpty ? "📁" : newFolderEmoji, colorHex: newFolderColor.toHex())
-                        newFolderName = ""; newFolderEmoji = "📁"; newFolderColor = .accentColor
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.regular)
-                    .disabled(newFolderName.isEmpty)
-                }
-            }
-            .padding(12)
-            .background(Color(.controlBackgroundColor).opacity(0.2))
-            .cornerRadius(10)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.secondary.opacity(0.06), lineWidth: 1)
-            )
-            
             if !storage.folders.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("My Folders")
@@ -63,7 +28,13 @@ struct FoldersTabView: View {
                         folderRow(folder: folder)
                     }
                 }
+            } else {
+                Text("No folders yet. Create one from the main window.")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+                    .padding(.top, 20)
             }
+            Spacer()
         }
     }
     

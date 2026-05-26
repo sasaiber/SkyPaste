@@ -31,6 +31,7 @@ class Storage: ObservableObject {
     @Published var spawnAtCursor: Bool = true
     @Published var selectedFolderID: UUID? = nil
     @Published var hoveredItemID: UUID? = nil
+    @Published var showPinnedOnly: Bool = false
     
     // Toast notification for folder move feedback
     @Published var folderMoveToast: (folder: AppFolder, shortcut: String?)? = nil
@@ -44,6 +45,19 @@ class Storage: ObservableObject {
     }
     
     // Global Shortcut Helpers
+    func shortcutConflictError(key: String, mod: Int, type: String, excludeID: UUID?, folders: [AppFolder]) -> String? {
+        let keyStr = type == "open" ? "folderShortcuts" : "folderMoveShortcuts"
+        guard let data = UserDefaults.standard.data(forKey: keyStr),
+              let decoded = try? JSONDecoder().decode([HotkeyManager.FolderShortcut].self, from: data) else { return nil }
+        for sc in decoded {
+            guard (excludeID == nil || sc.folderID != excludeID) && sc.keyText.lowercased() == key.lowercased() && sc.modifiers == mod else { continue }
+            if let folder = folders.first(where: { $0.id == sc.folderID }) {
+                return "This shortcut is used by \"\(folder.name)\""
+            }
+        }
+        return nil
+    }
+    
     func getFolderShortcut(folderID: UUID, type: String) -> (key: String, mod: Int)? {
         let keyStr = type == "open" ? "folderShortcuts" : "folderMoveShortcuts"
         if let data = UserDefaults.standard.data(forKey: keyStr),
@@ -102,6 +116,22 @@ class Storage: ObservableObject {
         guard let dir = documentDirectory else { return }
         if !fileManager.fileExists(atPath: dir.path) {
             try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+    }
+    
+    private func deleteMedia(for item: ClipboardItem) {
+        var urls: [URL] = []
+        if (item.type == .image || item.type == .file), let content = item.textContent {
+            urls = content.components(separatedBy: "\n").filter { !$0.isEmpty }.compactMap { URL(string: $0) }
+        } else if let url = item.fileURL {
+            urls = [url]
+        }
+        
+        for url in urls {
+            if url.path.contains("SkyPaste/Images") {
+                try? fileManager.removeItem(at: url)
+                ImageCache.shared.removeImage(for: url)
+            }
         }
     }
     
@@ -197,10 +227,7 @@ class Storage: ObservableObject {
         invalidateFolderCountCache()
         let toDelete = items.filter { !$0.isPinned && $0.folderID == nil }
         for item in toDelete {
-            if let url = item.fileURL, url.path.contains("SkyPaste/Images") {
-                try? fileManager.removeItem(at: url)
-                ImageCache.shared.removeImage(for: url)
-            }
+            deleteMedia(for: item)
         }
         items.removeAll { !$0.isPinned && $0.folderID == nil }
         saveItems()
@@ -270,9 +297,10 @@ class Storage: ObservableObject {
         }
     }
     
-    func createFolder(name: String, emoji: String? = nil, colorHex: String? = nil, appBundleIDs: [String] = []) {
+    func createFolder(name: String, emoji: String? = nil, colorHex: String? = nil, appBundleIDs: [String] = [], stackPinned: Bool = false) {
         var folder = AppFolder(name: name, emoji: emoji, colorHex: colorHex, order: folders.count)
         folder.appBundleIDs = appBundleIDs
+        folder.stackPinned = stackPinned
         folders.append(folder)
         saveFolders()
     }
@@ -326,21 +354,40 @@ class Storage: ObservableObject {
         }
     }
     
-    func clearFolder(id: UUID) {
-        DispatchQueue.main.async {
-            self.invalidateFolderCountCache()
-            let toDelete = self.items.filter { $0.folderID == id }
-            for item in toDelete {
-                if let url = item.fileURL, url.path.contains("SkyPaste/Images") {
-                    try? self.fileManager.removeItem(at: url)
-                    ImageCache.shared.removeImage(for: url)
-                }
-            }
-            withAnimation(.easeOut(duration: 0.2)) {
-                self.items.removeAll { $0.folderID == id }
-            }
-            self.saveItems()
+    func clearUnpinnedFromFolder(id: UUID) {
+        invalidateFolderCountCache()
+        let toDelete = items.filter { $0.folderID == id && !$0.isPinned }
+        for item in toDelete {
+            deleteMedia(for: item)
         }
+        items.removeAll { $0.folderID == id && !$0.isPinned }
+        saveItems()
+    }
+
+    func clearFolder(id: UUID) {
+        invalidateFolderCountCache()
+        let toDelete = items.filter { $0.folderID == id }
+        for item in toDelete {
+            if let url = item.fileURL, url.path.contains("SkyPaste/Images") {
+                try? fileManager.removeItem(at: url)
+                ImageCache.shared.removeImage(for: url)
+            }
+        }
+        items.removeAll { $0.folderID == id }
+        saveItems()
+    }
+
+    func deleteFolderAndAllItems(id: UUID) {
+        clearFolder(id: id)
+        deleteFolder(id: id)
+    }
+
+    func folderNameExists(_ name: String, excluding id: UUID? = nil) -> Bool {
+        folders.contains { $0.name == name && (id == nil || $0.id != id) }
+    }
+
+    func folder(withBundleID bundleID: String, excluding id: UUID? = nil) -> AppFolder? {
+        folders.first { $0.appBundleIDs.contains(bundleID) && (id == nil || $0.id != id) }
     }
     
     func updateFolder(_ folder: AppFolder) {
@@ -368,13 +415,7 @@ class Storage: ObservableObject {
     }
     
     private func formatShortcut(key: String, modifiers: Int) -> String {
-        let flags = NSEvent.ModifierFlags(rawValue: UInt(modifiers))
-        var str = ""
-        if flags.contains(.control) { str += "⌃" }
-        if flags.contains(.option) { str += "⌥" }
-        if flags.contains(.shift) { str += "⇧" }
-        if flags.contains(.command) { str += "⌘" }
-        return str + key.uppercased()
+        modifiers.shortcutSymbolString + key.uppercased()
     }
     
     func togglePin(for id: UUID) {
@@ -413,10 +454,7 @@ class Storage: ObservableObject {
             self.invalidateFolderCountCache()
             if let index = self.items.firstIndex(where: { $0.id == id }) {
                 let item = self.items[index]
-                if let url = item.fileURL, url.path.contains("SkyPaste/Images") {
-                    try? self.fileManager.removeItem(at: url)
-                    ImageCache.shared.removeImage(for: url)
-                }
+                self.deleteMedia(for: item)
                 _ = withAnimation(.easeOut(duration: 0.2)) {
                     self.items.remove(at: index)
                 }
@@ -474,10 +512,7 @@ class Storage: ObservableObject {
             let cutoff = Calendar.current.date(byAdding: .day, value: -retainDays, to: Date())!
             let toDelete = items.filter { !$0.isPinned && $0.timestamp < cutoff }
             for item in toDelete {
-                if let url = item.fileURL, url.path.contains("SkyPaste/Images") { 
-                    try? fileManager.removeItem(at: url)
-                    ImageCache.shared.removeImage(for: url)
-                }
+                deleteMedia(for: item)
             }
             items.removeAll { !$0.isPinned && $0.timestamp < cutoff }
         }
@@ -485,18 +520,37 @@ class Storage: ObservableObject {
         if limitMB > 0 {
             var currentSize: Double = 0
             for item in items {
-                if let url = item.fileURL, url.path.contains("SkyPaste/Images"), let attr = try? fileManager.attributesOfItem(atPath: url.path), let size = attr[.size] as? Double {
-                    currentSize += size / (1024 * 1024)
+                var urls: [URL] = []
+                if (item.type == .image || item.type == .file), let content = item.textContent {
+                    urls = content.components(separatedBy: "\n").filter { !$0.isEmpty }.compactMap { URL(string: $0) }
+                } else if let url = item.fileURL {
+                    urls = [url]
+                }
+                
+                for url in urls {
+                    if url.path.contains("SkyPaste/Images"), let attr = try? fileManager.attributesOfItem(atPath: url.path), let size = attr[.size] as? Double {
+                        currentSize += size / (1024 * 1024)
+                    }
                 }
             }
             
             while currentSize > limitMB, let lastUnpinned = items.lastIndex(where: { !$0.isPinned }) {
                 let item = items[lastUnpinned]
-                if let url = item.fileURL, url.path.contains("SkyPaste/Images"), let attr = try? fileManager.attributesOfItem(atPath: url.path), let size = attr[.size] as? Double {
-                    currentSize -= size / (1024 * 1024)
-                    try? fileManager.removeItem(at: url)
-                    ImageCache.shared.removeImage(for: url)
+                
+                var urls: [URL] = []
+                if (item.type == .image || item.type == .file), let content = item.textContent {
+                    urls = content.components(separatedBy: "\n").filter { !$0.isEmpty }.compactMap { URL(string: $0) }
+                } else if let url = item.fileURL {
+                    urls = [url]
                 }
+                
+                for url in urls {
+                    if url.path.contains("SkyPaste/Images"), let attr = try? fileManager.attributesOfItem(atPath: url.path), let size = attr[.size] as? Double {
+                        currentSize -= size / (1024 * 1024)
+                    }
+                }
+                
+                deleteMedia(for: item)
                 items.remove(at: lastUnpinned)
             }
         }

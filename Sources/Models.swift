@@ -10,6 +10,28 @@ enum ItemType: String, Codable {
     case other
 }
 
+enum BufferFilter: Equatable, Hashable {
+    case all
+    case text
+    case files
+    case images
+    case folders
+    case urls
+    case device(String)
+    
+    var rawValue: String {
+        switch self {
+        case .all: return "All"
+        case .text: return "Text"
+        case .files: return "Files"
+        case .images: return "Images"
+        case .folders: return "Folders"
+        case .urls: return "URLs"
+        case .device(let name): return name
+        }
+    }
+}
+
 enum SortOption: String, Codable, CaseIterable {
     case newest = "Newest First"
     case oldest = "Oldest First"
@@ -23,6 +45,8 @@ struct AppFolder: Identifiable, Codable, Hashable {
     var colorHex: String?
     var order: Int = 0
     var appBundleIDs: [String] = []
+    var stackPinned: Bool = false
+    var stackThreshold: Int = 2
     
     var displayEmoji: String {
         emoji ?? "📁"
@@ -57,6 +81,9 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
     
     // For files / images
     var fileURL: URL?
+    
+    // Remote
+    var remoteDeviceName: String?
     
     // In-memory properties (not saved directly to JSON, loaded lazily)
     var isPinned: Bool = false

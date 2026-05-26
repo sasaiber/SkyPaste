@@ -4,63 +4,35 @@ import AppKit
 class ImageCache {
     static let shared = ImageCache()
     
-    private var cache: [URL: NSImage] = [:]
-    private var accessOrder: [URL] = [] // LRU order
-    private let lock = NSLock()
-    private let maxCacheSize = 100 * 1024 * 1024 // 100 MB
-    private var currentCacheSize = 0
+    // NSCache automatically handles memory pressure and eviction natively
+    private let cache = NSCache<NSURL, NSImage>()
+    
+    init() {
+        // Bound both item count and memory pressure behavior.
+        cache.countLimit = 150
+        cache.totalCostLimit = 64 * 1024 * 1024 // ~64 MB
+    }
     
     func image(for url: URL) -> NSImage? {
-        lock.lock()
-        defer { lock.unlock() }
-        
-        if cache[url] != nil {
-            // Move to most recently used
-            accessOrder.removeAll { $0 == url }
-            accessOrder.append(url)
-        }
-        return cache[url]
+        return cache.object(forKey: url as NSURL)
     }
     
     func setImage(_ image: NSImage, for url: URL) {
-        lock.lock()
-        defer { lock.unlock() }
-        
-        let size = image.tiffRepresentation?.count ?? 0
-        
-        // Remove from order if exists (to move to end)
-        accessOrder.removeAll { $0 == url }
-        accessOrder.append(url)
-        
-        cache[url] = image
-        currentCacheSize += size
-        
-        // LRU eviction
-        while currentCacheSize > maxCacheSize && !accessOrder.isEmpty {
-            let oldest = accessOrder.removeFirst()
-            if let imgSize = cache[oldest]?.tiffRepresentation?.count {
-                currentCacheSize -= imgSize
-            }
-            cache.removeValue(forKey: oldest)
-        }
+        cache.setObject(image, forKey: url as NSURL, cost: estimatedCost(for: image))
     }
     
     func removeImage(for url: URL) {
-        lock.lock()
-        defer { lock.unlock() }
-        if let size = cache[url]?.tiffRepresentation?.count {
-            currentCacheSize -= size
-        }
-        accessOrder.removeAll { $0 == url }
-        cache.removeValue(forKey: url)
+        cache.removeObject(forKey: url as NSURL)
     }
     
     func clear() {
-        lock.lock()
-        defer { lock.unlock() }
-        cache.removeAll()
-        accessOrder.removeAll()
-        currentCacheSize = 0
+        cache.removeAllObjects()
+    }
+
+    private func estimatedCost(for image: NSImage) -> Int {
+        guard let rep = image.representations.first else { return 0 }
+        let pixels = rep.pixelsWide * rep.pixelsHigh
+        return max(0, pixels * 4) // RGBA bytes estimate
     }
     
     // Async helpers for row optimization
@@ -69,15 +41,50 @@ class ImageCache {
             completion(nil)
             return
         }
+        
+        let cacheKey = URL(string: "appicon://\(bundleID)")!
+        if let cached = image(for: cacheKey) {
+            completion(cached)
+            return
+        }
+        
         DispatchQueue.global(qos: .utility).async {
-            let icon = NSWorkspace.shared.icon(forFile: "/Applications/\(bundleID).app")
+            var icon: NSImage? = nil
+            if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+                icon = NSWorkspace.shared.icon(forFile: url.path)
+            } else {
+                icon = NSWorkspace.shared.icon(forFile: "/Applications/\(bundleID).app")
+            }
             DispatchQueue.main.async {
+                if let icon = icon {
+                    self.setImage(icon, for: cacheKey)
+                }
+                completion(icon)
+            }
+        }
+    }
+    
+    func asyncFileIcon(url: URL, completion: @escaping (NSImage?) -> Void) {
+        let ext = url.pathExtension.isEmpty ? "default" : url.pathExtension.lowercased()
+        let cacheKey = URL(string: "fileicon://\(ext)")!
+        if let cached = image(for: cacheKey) {
+            completion(cached)
+            return
+        }
+        DispatchQueue.global(qos: .utility).async {
+            let icon = NSWorkspace.shared.icon(forFile: url.path)
+            DispatchQueue.main.async {
+                self.setImage(icon, for: cacheKey)
                 completion(icon)
             }
         }
     }
     
     func asyncThumbnail(url: URL, completion: @escaping (NSImage?) -> Void) {
+        if let cached = image(for: url) {
+            completion(cached)
+            return
+        }
         DispatchQueue.global(qos: .utility).async {
             let image = NSImage(contentsOf: url)
             DispatchQueue.main.async {

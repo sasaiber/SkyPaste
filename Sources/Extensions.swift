@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import ServiceManagement
+import Foundation
 
 @available(macOS 13.0, *)
 extension SMAppService {
@@ -80,5 +81,37 @@ extension Date {
             formatter.setLocalizedDateFormatFromTemplate("HH:mm")
         }
         return formatter.string(from: self)
+    }
+}
+
+// MARK: - Shared formatting helpers
+extension NSEvent.ModifierFlags {
+    var symbolString: String {
+        var str = ""
+        if contains(.control) { str += "⌃" }
+        if contains(.option) { str += "⌥" }
+        if contains(.shift) { str += "⇧" }
+        if contains(.command) { str += "⌘" }
+        return str
+    }
+}
+
+extension Int {
+    var shortcutSymbolString: String {
+        NSEvent.ModifierFlags(rawValue: UInt(self)).symbolString
+    }
+}
+
+extension String {
+    var appDisplayNameFromBundlePath: String {
+        hasSuffix(".app") ? String(dropLast(4)) : self
+    }
+}
+
+extension NSWorkspace {
+    func appDisplayName(forBundleID bundleID: String) -> String {
+        guard let url = urlForApplication(withBundleIdentifier: bundleID) else { return bundleID }
+        let path = url.deletingLastPathComponent().lastPathComponent
+        return path.appDisplayNameFromBundlePath
     }
 }

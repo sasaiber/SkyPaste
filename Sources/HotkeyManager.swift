@@ -396,6 +396,7 @@ class HotkeyManager {
     var onToggleRequested: (() -> Void)?
     var onPastePlainRequested: (() -> Void)?
     var onLibraryRequested: (() -> Void)?
+    var onPinnedOnlyRequested: (() -> Void)?
     var onFolderShortcutRequested: ((UUID) -> Void)?
     var onFolderMoveRequested: ((UUID) -> Void)?
     
@@ -447,6 +448,17 @@ class HotkeyManager {
         let flagsLib = NSEvent.ModifierFlags(rawValue: UInt(hkLibModifiers))
         registerCarbonHotKey(key: hkLibKey, modifiers: flagsLib) { [weak self] in
             self?.onLibraryRequested?()
+        }
+        
+        // --- Hotkey 4: Show Pinned Only ---
+        let hkPinnedOnlyKey = (defaults.string(forKey: "hkPinnedOnlyKey") ?? "p").lowercased()
+        var hkPinnedOnlyModifiers = defaults.integer(forKey: "hkPinnedOnlyModifiers")
+        if hkPinnedOnlyModifiers == 0 {
+            hkPinnedOnlyModifiers = Int(NSEvent.ModifierFlags.option.rawValue)
+        }
+        let flagsPinnedOnly = NSEvent.ModifierFlags(rawValue: UInt(hkPinnedOnlyModifiers))
+        registerCarbonHotKey(key: hkPinnedOnlyKey, modifiers: flagsPinnedOnly) { [weak self] in
+            self?.onPinnedOnlyRequested?()
         }
         
         // --- Folder Open Shortcuts ---

@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import CoreGraphics
 
 class PreviewWindowManager {
     static let shared = PreviewWindowManager()
@@ -39,6 +40,7 @@ private let qwertyToCyrillic: [Character: Character] = [
 struct MainView: View {
     @ObservedObject var storage: Storage
     @State private var searchText = ""
+    @State private var bufferFilter: BufferFilter = .all
     @State private var keyMonitor: Any? = nil
     @State private var itemToAssignToNewFolder: UUID?
     
@@ -50,12 +52,20 @@ struct MainView: View {
     
     @State private var showingTrashAlert = false
     @State private var showingFolderTrashAlert = false
+    @State private var showingClearFolderAlert = false
+    @State private var showingDeleteFolderAllAlert = false
+    @State private var folderToConfirmClear: AppFolder? = nil
+    @State private var folderToConfirmDeleteAll: AppFolder? = nil
     @State private var currentWindowHeight: CGFloat = 520
     
     @AppStorage("disableMediaPreviews") private var disableMediaPreviews: Bool = false
     @AppStorage("unlimitedMediaPreviews") private var unlimitedMediaPreviews: Bool = true
     @AppStorage("maxPreviewsLimit") private var maxPreviewsLimit: Int = 10
     @AppStorage("suppressGlobalTrashWarning") private var suppressGlobalTrashWarning: Bool = false
+    @AppStorage("pinnedStackEnabled") private var pinnedStackEnabled: Bool = false
+    @AppStorage("pinnedStackMinItems") private var pinnedStackMinItems: Int = 2
+
+    @State private var pinnedStackExpanded: Bool = false
 
     @AppStorage("hkPinKey") private var hkPinKey: String = "p"
     @AppStorage("hkPinModifiers") private var hkPinModifiers: Int = Int(NSEvent.ModifierFlags.command.rawValue)
@@ -84,24 +94,60 @@ struct MainView: View {
     
     var filteredItems: [ClipboardItem] {
         var result = storage.items
+        if storage.showPinnedOnly {
+            result = result.filter { $0.isPinned }
+        }
         if let fid = storage.selectedFolderID {
             result = result.filter { $0.folderID == fid }
         } else {
             result = result.filter { $0.folderID == nil }
         }
+        
+        if bufferFilter != .all {
+            result = result.filter { item in
+                switch bufferFilter {
+                case .all: return true
+                case .text: return item.type == .text || item.type == .link || item.type == .other
+                case .files:
+                    guard item.type == .file else { return false }
+                    guard let url = item.fileURL else { return true }
+                    var isDir: ObjCBool = false
+                    FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+                    return !isDir.boolValue
+                case .images: return item.type == .image
+                case .folders:
+                    guard item.type == .file else { return false }
+                    guard let url = item.fileURL else { return false }
+                    var isDir: ObjCBool = false
+                    FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+                    return isDir.boolValue
+                case .urls:
+                    return item.type == .link
+                case .device(let name):
+                    return item.remoteDeviceName == name
+                }
+            }
+        }
+        
         if !searchText.isEmpty {
             result = result.filter { ($0.textContent ?? "").localizedCaseInsensitiveContains(searchText) }
         }
         if storage.sortOption == .oldest {
             result.sort {
                 if $0.isPinned != $1.isPinned { return $0.isPinned }
-                if $0.isPinned { return $0.pinnedOrder < $1.pinnedOrder }
+                if $0.isPinned {
+                    if $0.pinnedOrder == $1.pinnedOrder { return $0.timestamp < $1.timestamp }
+                    return $0.pinnedOrder < $1.pinnedOrder
+                }
                 return $0.timestamp < $1.timestamp
             }
         } else {
             result.sort {
                 if $0.isPinned != $1.isPinned { return $0.isPinned }
-                if $0.isPinned { return $0.pinnedOrder < $1.pinnedOrder }
+                if $0.isPinned {
+                    if $0.pinnedOrder == $1.pinnedOrder { return $0.timestamp > $1.timestamp }
+                    return $0.pinnedOrder < $1.pinnedOrder
+                }
                 return $0.timestamp > $1.timestamp
             }
         }
@@ -116,6 +162,7 @@ struct MainView: View {
             }
             
             searchBar
+            filterBar
             
             Group {
                 Button(action: { NSApplication.shared.terminate(nil) }) { EmptyView() }.keyboardShortcut("q", modifiers: .command)
@@ -273,7 +320,7 @@ struct MainView: View {
             
             clipboardList
         }
-        .frame(width: 400, height: currentWindowHeight, alignment: .top)
+        .frame(width: 430, height: currentWindowHeight, alignment: .top)
         .glassBackground(cornerRadius: 16)
         .edgesIgnoringSafeArea(.all)
         .onExitCommand {
@@ -288,6 +335,9 @@ struct MainView: View {
             }
         }
         .onAppear {
+            if shouldStackPinned && isTriggerKeyHeld() {
+                pinnedStackExpanded = true
+            }
             
             // Local key event monitor to handle delete/pin shortcuts robustly even when search field has focus
             keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
@@ -304,12 +354,9 @@ struct MainView: View {
                     isDeleteMatch = (chars == String(deleteChar) || (!cyrillicChar.isEmpty && chars == cyrillicChar))
                 }
                 
-                NSLog("[SkyPaste Debug] KeyDown: keyCode=%d, chars=%@, flags=%lu, isDeleteMatch=%d, expectedFlags=%lu, hoveredItemID=%@", event.keyCode, event.charactersIgnoringModifiers ?? "", flags.rawValue, isDeleteMatch ? 1 : 0, expectedFlags.rawValue, String(describing: storage.hoveredItemID))
-                
                 if isDeleteMatch && flags == expectedFlags {
                     let isEditing = NSApp.keyWindow?.firstResponder is NSTextView
                     let isDeleteKey = (event.keyCode == 51 || event.keyCode == 117)
-                    NSLog("[SkyPaste Debug] Match delete! isEditing=%d, isDeleteKey=%d, searchTextIsEmpty=%d", isEditing ? 1 : 0, isDeleteKey ? 1 : 0, searchText.isEmpty ? 1 : 0)
                     
                     if isDeleteKey && isEditing && !searchText.isEmpty {
                         return event // normal text deletion in search bar if search bar is not empty
@@ -320,7 +367,6 @@ struct MainView: View {
                     
                     if let id = storage.hoveredItemID {
                         let selectedURLs = storage.popoverSelectedURLs.isEmpty ? (storage.popoverHoveredURL != nil ? [storage.popoverHoveredURL!] : []) : storage.popoverSelectedURLs
-                        NSLog("[SkyPaste Debug] Hovered item found: id=%@, selectedURLs=%@", id.uuidString, selectedURLs.map { $0.absoluteString })
                         if !selectedURLs.isEmpty {
                             withAnimation(.easeOut(duration: 0.2)) {
                                 storage.deleteFiles(urlsToDelete: selectedURLs, from: id)
@@ -331,8 +377,6 @@ struct MainView: View {
                             }
                         }
                         return nil // Consume keydown event
-                    } else {
-                        NSLog("[SkyPaste Debug] Hovered item is NIL, cannot delete!")
                     }
                 }
                 
@@ -377,12 +421,15 @@ struct MainView: View {
             }
         }
         .onDisappear {
+            storage.showPinnedOnly = false
+            bufferFilter = .all
             if let monitor = keyMonitor {
                 NSEvent.removeMonitor(monitor)
                 keyMonitor = nil
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SkyPasteWindowDidShow"))) { _ in
+            bufferFilter = .all
             if let panel = WindowManager.shared.panel {
                 // Force AppKit to update hover states by posting a dummy mouseMoved event at window load
                 let mouseLoc = panel.mouseLocationOutsideOfEventStream
@@ -467,23 +514,38 @@ struct MainView: View {
                     }
                     .padding().frame(width: 320).background(Color(NSColor.windowBackgroundColor)).cornerRadius(12).shadow(radius: 10)
                 }
-            } else if showingFolderTrashAlert {
+            } else if showingClearFolderAlert, let folder = folderToConfirmClear {
                 ZStack {
-                    Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { showingFolderTrashAlert = false }
+                    Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { showingClearFolderAlert = false; folderToConfirmClear = nil }
                     VStack(spacing: 16) {
-                        Text("Clear Items").font(.headline)
-                        Text("Do you want to clear this specific folder, or clear all unpinned items globally?")
+                        Text("Clear All Items").font(.headline)
+                        Text("This will permanently delete all items (including pinned) from \"\(folder.name)\". This action cannot be undone.")
                             .font(.caption).multilineTextAlignment(.center).foregroundColor(.secondary)
                         HStack {
-                            Button("Cancel") { showingFolderTrashAlert = false }.keyboardShortcut(.escape, modifiers: [])
+                            Button("Cancel") { showingClearFolderAlert = false; folderToConfirmClear = nil }.keyboardShortcut(.escape, modifiers: [])
                             Spacer()
-                            Button("Everywhere (Unpinned)") {
-                                storage.clearUnpinned()
-                                showingFolderTrashAlert = false
-                            }
-                            Button("Only In This Folder") {
-                                if let fid = storage.selectedFolderID { storage.clearFolder(id: fid) }
-                                showingFolderTrashAlert = false
+                            Button("Clear All", role: .destructive) {
+                                storage.clearFolder(id: folder.id)
+                                showingClearFolderAlert = false; folderToConfirmClear = nil
+                            }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                        }
+                    }
+                    .padding().frame(width: 380).background(Color(NSColor.windowBackgroundColor)).cornerRadius(12).shadow(radius: 10)
+                }
+            } else if showingDeleteFolderAllAlert, let folder = folderToConfirmDeleteAll {
+                ZStack {
+                    Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { showingDeleteFolderAllAlert = false; folderToConfirmDeleteAll = nil }
+                    VStack(spacing: 16) {
+                        Text("Delete Folder & All Items").font(.headline)
+                        Text("This will permanently delete \"\(folder.name)\" and all its items (including pinned) from everywhere. This action cannot be undone.")
+                            .font(.caption).multilineTextAlignment(.center).foregroundColor(.secondary)
+                        HStack {
+                            Button("Cancel") { showingDeleteFolderAllAlert = false; folderToConfirmDeleteAll = nil }.keyboardShortcut(.escape, modifiers: [])
+                            Spacer()
+                            Button("Delete All", role: .destructive) {
+                                storage.deleteFolderAndAllItems(id: folder.id)
+                                storage.selectedFolderID = nil
+                                showingDeleteFolderAllAlert = false; folderToConfirmDeleteAll = nil
                             }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
                         }
                     }
@@ -493,16 +555,52 @@ struct MainView: View {
         }
     }
     
+    private var activeFilters: [BufferFilter] {
+        var filters: [BufferFilter] = [.all, .text, .files, .images, .folders, .urls]
+        let devices = Set(storage.items.compactMap { $0.remoteDeviceName })
+        for device in devices.sorted() {
+            filters.append(.device(device))
+        }
+        return filters
+    }
+
+    private var filterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(activeFilters, id: \.self) { filter in
+                    Button(action: {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            bufferFilter = filter
+                        }
+                    }) {
+                        Text(filter.rawValue)
+                            .font(.system(size: 11, weight: bufferFilter == filter ? .semibold : .medium, design: .rounded))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule()
+                                    .fill(bufferFilter == filter ? Color.accentColor : Color.secondary.opacity(0.1))
+                            )
+                            .foregroundColor(bufferFilter == filter ? .white : .primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 10)
+        }
+        .padding(.bottom, 6)
+    }
+    
     private var searchBar: some View {
         HStack {
             Image(systemName: "magnifyingglass").foregroundColor(.secondary)
             TextField("Search Copied History...", text: $searchText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .font(.system(size: 12, weight: .medium, design: .rounded))
             Spacer()
             HStack(spacing: 8) {
                 Menu {
-                    Button("All Items") { storage.selectedFolderID = nil }
+                    Button("All Items") { storage.selectedFolderID = nil; storage.showPinnedOnly = false }
                     Button("Library...") {
                         let position = UserDefaults.standard.string(forKey: "popupPosition") ?? "cursor"
                         LibraryWindowManager.shared.toggle(storage: storage, position: position)
@@ -516,7 +614,7 @@ struct MainView: View {
                         showingFolderSettings = true
                     }
                     Divider()
-                    ForEach(storage.folders.sorted { $0.order < $1.order }) { f in Button("\(f.displayEmoji) \(f.name)") { storage.selectedFolderID = f.id } }
+                    ForEach(storage.folders.sorted { $0.order < $1.order }) { f in Button("\(f.displayEmoji) \(f.name)") { storage.selectedFolderID = f.id; storage.showPinnedOnly = false } }
                 } label: { Image(systemName: storage.selectedFolderID == nil ? "folder" : "folder.fill").foregroundColor(storage.selectedFolderID == nil ? .secondary : .accentColor).frame(width: 24, height: 24).contentShape(Rectangle()) }
                 .menuStyle(.borderlessButton).fixedSize().help("Folders")
                 
@@ -526,8 +624,26 @@ struct MainView: View {
                 .menuStyle(.borderlessButton).fixedSize()
                 
                 Button(action: {
-                    if storage.selectedFolderID != nil {
-                        showingFolderTrashAlert = true
+                    if storage.showPinnedOnly {
+                        storage.showPinnedOnly = false
+                        if WindowManager.shared.isWindowVisible {
+                            WindowManager.shared.close()
+                        }
+                    } else {
+                        storage.showPinnedOnly = true
+                    }
+                }) {
+                    Image(systemName: storage.showPinnedOnly ? "pin.fill" : "pin")
+                        .foregroundColor(storage.showPinnedOnly ? .accentColor : .secondary)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(storage.showPinnedOnly ? "Show All Items" : "Show Pinned Only")
+                
+                Button(action: {
+                    if let fid = storage.selectedFolderID {
+                        storage.clearUnpinnedFromFolder(id: fid)
                     } else {
                         if suppressGlobalTrashWarning {
                             storage.clearUnpinned()
@@ -536,14 +652,15 @@ struct MainView: View {
                         }
                     }
                 }) { Image(systemName: "trash").foregroundColor(.secondary).frame(width: 24, height: 24).contentShape(Rectangle()) }
-                .buttonStyle(.plain).help("Clear History")
+                .buttonStyle(.plain).help("Clear Unpinned")
                 
                 Button(action: { AppDelegate.shared.openSettings() }) { Image(systemName: "gearshape.fill").foregroundColor(.secondary).frame(width: 24, height: 24).contentShape(Rectangle()) }.buttonStyle(.plain).help("Preferences")
                 
                 Button(action: { NSApplication.shared.terminate(nil) }) { Image(systemName: "power").foregroundColor(.secondary).frame(width: 24, height: 24).contentShape(Rectangle()) }.buttonStyle(.plain).help("Quit SkyPaste")
             }
         }
-        .padding(12)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
     }
     
     private func folderHeader(_ folder: AppFolder) -> some View {
@@ -558,109 +675,247 @@ struct MainView: View {
                     showingFolderSettings = true
                 }
                 Divider()
-                Button("Clear all items in this folder", role: .destructive) { withAnimation(.easeOut(duration: 0.2)) { storage.clearFolder(id: folder.id) } }
+                Button("Clear all items in this folder (incl. pinned)", role: .destructive) {
+                    folderToConfirmClear = folder
+                    showingClearFolderAlert = true
+                }
                 Divider()
-                Button("Delete folder (keep items)", role: .destructive) { withAnimation(.easeOut(duration: 0.2)) { storage.deleteFolder(id: folder.id); storage.selectedFolderID = nil } }
-                Button("Delete folder and all its items", role: .destructive) { withAnimation(.easeOut(duration: 0.2)) { storage.clearFolder(id: folder.id); storage.deleteFolder(id: folder.id); storage.selectedFolderID = nil } }
+                Button("Delete folder (keep items)", role: .destructive) { storage.deleteFolder(id: folder.id); storage.selectedFolderID = nil }
+                Button("Delete folder and all its items", role: .destructive) {
+                    folderToConfirmDeleteAll = folder
+                    showingDeleteFolderAllAlert = true
+                }
                 Divider()
-                Button("Close") { storage.selectedFolderID = nil }
+                Button("Close") { storage.selectedFolderID = nil; storage.showPinnedOnly = false }
             } label: { Image(systemName: "ellipsis.circle").foregroundColor(.secondary).font(.system(size: 15)).frame(width: 24, height: 24).contentShape(Rectangle()) }
             .menuStyle(.borderlessButton).fixedSize()
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
     }
     
+    private var shouldStackPinned: Bool {
+        guard pinnedStackEnabled && !storage.showPinnedOnly else { return false }
+        let threshold: Int
+        if let fid = storage.selectedFolderID, let folder = storage.folders.first(where: { $0.id == fid }) {
+            guard folder.stackPinned else { return false }
+            threshold = folder.stackThreshold
+        } else {
+            threshold = pinnedStackMinItems
+        }
+        return pinnedItems.count >= threshold
+    }
+
+    private func isTriggerKeyHeld() -> Bool {
+        let keyStr = UserDefaults.standard.string(forKey: "hk1Key") ?? "s"
+        let map: [String: CGKeyCode] = [
+            "a": 0x00, "b": 0x0B, "c": 0x08, "d": 0x02, "e": 0x0E,
+            "f": 0x03, "g": 0x05, "h": 0x04, "i": 0x22, "j": 0x26,
+            "k": 0x28, "l": 0x25, "m": 0x2E, "n": 0x2D, "o": 0x1F,
+            "p": 0x23, "q": 0x0C, "r": 0x0F, "s": 0x01, "t": 0x11,
+            "u": 0x20, "v": 0x09, "w": 0x0D, "x": 0x07, "y": 0x10,
+            "z": 0x06, "space": 0x31, "delete": 0x33,
+        ]
+        guard let keyCode = map[keyStr.lowercased()] else { return false }
+        return CGEventSource.keyState(.combinedSessionState, key: keyCode)
+    }
+
+    private var pinnedItems: [ClipboardItem] {
+        filteredItems.filter { $0.isPinned }
+    }
+
+    private var unpinnedItems: [ClipboardItem] {
+        filteredItems.filter { !$0.isPinned }
+    }
+
+    private func itemRow(_ item: ClipboardItem) -> some View {
+        let fileURLs: [URL] = {
+            if item.type == .file || item.type == .image {
+                if let content = item.textContent {
+                    return content.components(separatedBy: "\n")
+                        .filter { !$0.isEmpty }
+                        .compactMap { s -> URL? in
+                            if let u = URL(string: s), u.scheme == "file" { return u }
+                            return URL(fileURLWithPath: s)
+                        }
+                } else if let url = item.fileURL {
+                    return [url]
+                }
+            }
+            return []
+        }()
+
+        return ClipboardItemRow(
+            storage: storage,
+            item: item,
+            folders: storage.folders,
+            hoveredItemID: storage.hoveredItemID,
+            selectedFolderID: storage.selectedFolderID,
+            onPin: { withAnimation(.easeOut(duration: 0.2)) { storage.togglePin(for: item.id) } },
+            onDelete: { withAnimation(.easeOut(duration: 0.2)) { storage.deleteItem(with: item.id) } },
+            onAssignToFolder: { fid in storage.assign(item: item.id, to: fid) },
+            onImageTap: { url in
+                PreviewWindowManager.shared.show(url: url)
+            },
+            onExtractFile: { urls, pin, folderID in
+                var newItem = ClipboardItem(
+                    timestamp: Date(),
+                    firstCopiedAt: Date(),
+                    type: item.type,
+                    textContent: urls.map { $0.absoluteString }.joined(separator: "\n"),
+                    title: urls.count > 1 ? "\(urls.count) files" : urls.first?.lastPathComponent,
+                    fileURL: urls.first,
+                    appSource: item.appSource,
+                    appBundleID: item.appBundleID,
+                    extensions: item.extensions,
+                    fileCount: urls.count
+                )
+                newItem.isPinned = pin
+                newItem.folderID = folderID
+                storage.addItem(newItem)
+            },
+            onCreateFolder: { urls in
+                if let urls = urls, !urls.isEmpty {
+                    urlsToExtractToNewFolder = urls
+                    itemToExtractFrom = item
+                } else {
+                    itemToAssignToNewFolder = item.id
+                }
+                storage.hoveredItemID = nil
+                editingFolderInMain = nil
+                showingFolderSettings = true
+            },
+            onDeleteFiles: { urlsToDelete in
+                withAnimation(.easeOut(duration: 0.2)) {
+                    storage.deleteFiles(urlsToDelete: urlsToDelete, from: item.id)
+                }
+            }
+        )
+        .id(item.id)
+        .contentShape(Rectangle())
+        .onHover { isHovered in
+            guard !showingFolderSettings else { return }
+            withAnimation(.quickSpring) {
+                if isHovered { storage.hoveredItemID = item.id }
+                else if storage.hoveredItemID == item.id { storage.hoveredItemID = nil }
+            }
+        }
+        .onTapGesture {
+            NSApp.activate(ignoringOtherApps: true)
+            let flags = (NSApp.currentEvent?.modifierFlags ?? []).union(NSEvent.modifierFlags)
+            let autoPaste = autoPasteActive
+            let defaultPlain = pastePlainActive
+
+            if flags.contains(.command) {
+                AppDelegate.shared.monitorRef?.copyToPasteboard(item: item, plainTextOnly: false)
+                WindowManager.shared.close()
+            } else if flags.contains(.option) && flags.contains(.shift) {
+                AppDelegate.shared.monitorRef?.copyToPasteboard(item: item, plainTextOnly: false)
+                AppDelegate.shared.monitorRef?.triggerCmdV()
+                WindowManager.shared.close()
+            } else if flags.contains(.option) {
+                AppDelegate.shared.monitorRef?.copyToPasteboard(item: item, plainTextOnly: true)
+                AppDelegate.shared.monitorRef?.triggerCmdV()
+                WindowManager.shared.close()
+            } else {
+                AppDelegate.shared.pasteFromClipboard(item: item, plainTextOnly: defaultPlain, shouldPaste: autoPaste)
+            }
+            storage.moveToTop(for: item.id)
+        }
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .contentShape(Rectangle())
+        // Uses NSDraggingSession with .copy-only mask — prevents Finder alias creation.
+        // Supports dragging multiple files at once without ⌘.
+        .multiFileDraggable(urls: fileURLs)
+    }
+
+
+    @ViewBuilder
+    private func pinnedStackView(pinned: [ClipboardItem]) -> some View {
+        VStack(spacing: 0) {
+            Button(action: { pinnedStackExpanded.toggle() }) {
+                HStack(spacing: 8) {
+                    ZStack(alignment: .leading) {
+                        ForEach(Array(pinned.prefix(3).reversed().enumerated()), id: \.element.id) { i, p in
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.accentColor.opacity(0.15 - Double(i) * 0.04))
+                                .frame(width: 20, height: 20)
+                                .offset(x: CGFloat(i) * 4, y: CGFloat(i) * -1)
+                        }
+                        iconForType(pinned[0].type)
+                            .font(.system(size: 12))
+                            .foregroundColor(.accentColor)
+                            .frame(width: 20, height: 20)
+                    }
+                    .frame(width: 32, height: 20)
+
+                    Text(pinned.first?.textContent ?? "\(pinned.count) items")
+                        .font(.system(size: 11, weight: .regular, design: .rounded))
+                        .lineLimit(1)
+                        .foregroundColor(.primary)
+
+                    Spacer()
+
+                    Text("\(pinned.count)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
+
+                    Image(systemName: pinnedStackExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.06))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(Color.accentColor.opacity(0.12), lineWidth: 0.5)
+                        )
+                )
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.vertical, 2)
+
+            if pinnedStackExpanded {
+                ForEach(pinned) { p in
+                    itemRow(p)
+                }
+                Divider()
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+            }
+        }
+    }
+
     private var clipboardList: some View {
         ScrollViewReader { proxy in
             List {
-                ForEach(filteredItems) { item in
-                    ClipboardItemRow(
-                        storage: storage,
-                        item: item,
-                        folders: storage.folders,
-                        hoveredItemID: storage.hoveredItemID,
-                        selectedFolderID: storage.selectedFolderID,
-                        onPin: { withAnimation(.easeOut(duration: 0.2)) { storage.togglePin(for: item.id) } },
-                        onDelete: { withAnimation(.easeOut(duration: 0.2)) { storage.deleteItem(with: item.id) } },
-                        onAssignToFolder: { fid in storage.assign(item: item.id, to: fid) },
-                        onImageTap: { url in
-                            PreviewWindowManager.shared.show(url: url)
-                        },
-                        onExtractFile: { urls, pin, folderID in
-                            var newItem = ClipboardItem(
-                                timestamp: Date(),
-                                firstCopiedAt: Date(),
-                                type: item.type,
-                                textContent: urls.map { $0.absoluteString }.joined(separator: "\n"),
-                                title: urls.count > 1 ? "\(urls.count) files" : urls.first?.lastPathComponent,
-                                fileURL: urls.first,
-                                appSource: item.appSource,
-                                appBundleID: item.appBundleID,
-                                extensions: item.extensions,
-                                fileCount: urls.count
-                            )
-                            newItem.isPinned = pin
-                            newItem.folderID = folderID
-                            storage.addItem(newItem)
-                        },
-                        onCreateFolder: { urls in
-                            if let urls = urls, !urls.isEmpty {
-                                urlsToExtractToNewFolder = urls
-                                itemToExtractFrom = item
-                            } else {
-                                itemToAssignToNewFolder = item.id
-                            }
-                            storage.hoveredItemID = nil
-                            editingFolderInMain = nil
-                            showingFolderSettings = true
-                        },
-                        onDeleteFiles: { urlsToDelete in
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                storage.deleteFiles(urlsToDelete: urlsToDelete, from: item.id)
-                            }
+                if shouldStackPinned, !pinnedItems.isEmpty {
+                    pinnedStackView(pinned: pinnedItems)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+
+                    ForEach(Array(unpinnedItems.enumerated()), id: \.element.id) { _, item in
+                        itemRow(item)
+                    }
+                } else {
+                    ForEach(Array(filteredItems.enumerated()), id: \.element.id) { index, item in
+                        if index > 0 && !item.isPinned && filteredItems[index - 1].isPinned {
+                            Divider()
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
                         }
-                    )
-                    .id(item.id)
-                    .contentShape(Rectangle())
-                     .onHover { isHovered in
-                         guard !showingFolderSettings else { return }
-                         withAnimation(.quickSpring) {
-                             if isHovered { storage.hoveredItemID = item.id }
-                             else if storage.hoveredItemID == item.id { storage.hoveredItemID = nil }
-                         }
-                     }
-                     .onTapGesture {
-                         NSApp.activate(ignoringOtherApps: true)
-                         let flags = (NSApp.currentEvent?.modifierFlags ?? []).union(NSEvent.modifierFlags)
-                         let autoPaste = autoPasteActive
-                         let defaultPlain = pastePlainActive
-                         
-                         if flags.contains(.command) {
-                             AppDelegate.shared.monitorRef?.copyToPasteboard(item: item, plainTextOnly: false)
-                             WindowManager.shared.close()
-                         } else if flags.contains(.option) && flags.contains(.shift) {
-                             AppDelegate.shared.monitorRef?.copyToPasteboard(item: item, plainTextOnly: false)
-                             AppDelegate.shared.monitorRef?.triggerCmdV()
-                             WindowManager.shared.close()
-                         } else if flags.contains(.option) {
-                             AppDelegate.shared.monitorRef?.copyToPasteboard(item: item, plainTextOnly: true)
-                             AppDelegate.shared.monitorRef?.triggerCmdV()
-                             WindowManager.shared.close()
-                         } else {
-                             AppDelegate.shared.pasteFromClipboard(item: item, plainTextOnly: defaultPlain, shouldPaste: autoPaste)
-                         }
-                         
-                         storage.moveToTop(for: item.id)
-                     }
-                     .listRowInsets(EdgeInsets())
-                     .listRowBackground(Color.clear)
-                     .listRowSeparator(.hidden)
-                     .contentShape(Rectangle())
-                    .padding(.vertical, 4)
-                }
-                .onMove { source, destination in
-                    let isReorderingPinnedOnly = source.allSatisfy { filteredItems[$0].isPinned }
-                    if isReorderingPinnedOnly { storage.movePinned(source: source, destination: destination) }
+                        itemRow(item)
+                    }
+                    .onMove { source, destination in
+                        let isReorderingPinnedOnly = source.allSatisfy { filteredItems[$0].isPinned }
+                        if isReorderingPinnedOnly { storage.movePinned(source: source, destination: destination) }
+                    }
                 }
             }
             .listStyle(.plain)
@@ -671,6 +926,16 @@ struct MainView: View {
             .onChange(of: filteredItems.first?.id) { _, topID in
                 if let id = topID { proxy.scrollTo(id, anchor: .top) }
             }
+        }
+    }
+
+    private func iconForType(_ type: ItemType) -> Image {
+        switch type {
+        case .text: return Image(systemName: "doc.text.fill")
+        case .link: return Image(systemName: "link.circle.fill")
+        case .image: return Image(systemName: "photo.fill")
+        case .file: return Image(systemName: "doc.fill")
+        case .other: return Image(systemName: "doc.on.clipboard.fill")
         }
     }
     
@@ -719,6 +984,14 @@ struct FolderSettingsOverlay: View {
     @State private var appBundleIDs: [String] = []
     @State private var showingAppPicker = false
     @State private var newBundleID = ""
+    @State private var folderStackPinned: Bool = false
+    @State private var folderStackThreshold: Int = 2
+
+    @State private var nameError: String?
+    @State private var bindingConflictError: String?
+    @State private var shortcutConflictMessage: String?
+
+    private var hasErrors: Bool { nameError != nil }
     
     var body: some View {
         ZStack {
@@ -741,15 +1014,24 @@ struct FolderSettingsOverlay: View {
                         .textFieldStyle(.roundedBorder)
                 }
                 
+                if let err = nameError {
+                    Text(err)
+                        .font(.caption2).foregroundColor(.red)
+                }
+                
                 VStack(alignment: .trailing, spacing: 8) {
                     HStack(alignment: .center, spacing: 8) {
                         Text("Open:").font(.caption).foregroundColor(.secondary).frame(width: 40, alignment: .leading)
-                        ShortcutRecorder(actionName: "Open \(name)", keyString: $openKey, modifiers: $openMod, onValidate: { _,_,_ in nil })
+                        ShortcutRecorder(actionName: "Open \(name)", keyString: $openKey, modifiers: $openMod, onValidate: { [storage, folderToEdit] key, mod, _ in
+                            storage.shortcutConflictError(key: key, mod: mod, type: "open", excludeID: folderToEdit?.id, folders: storage.folders)
+                        })
                             .frame(width: 100)
                     }
                     HStack(alignment: .center, spacing: 8) {
                         Text("Move:").font(.caption).foregroundColor(.secondary).frame(width: 40, alignment: .leading)
-                        ShortcutRecorder(actionName: "Move \(name)", keyString: $moveKey, modifiers: $moveMod, onValidate: { _,_,_ in nil })
+                        ShortcutRecorder(actionName: "Move \(name)", keyString: $moveKey, modifiers: $moveMod, onValidate: { [storage, folderToEdit] key, mod, _ in
+                            storage.shortcutConflictError(key: key, mod: mod, type: "move", excludeID: folderToEdit?.id, folders: storage.folders)
+                        })
                             .frame(width: 100)
                     }
                 }
@@ -813,6 +1095,43 @@ struct FolderSettingsOverlay: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.top, 2)
+                    if let err = bindingConflictError {
+                        Text(err)
+                            .font(.caption2).foregroundColor(.red)
+                    }
+                }
+                .padding(8)
+                .background(Color.secondary.opacity(0.05))
+                .cornerRadius(8)
+
+                VStack(spacing: 8) {
+                    Toggle(isOn: $folderStackPinned) {
+                        HStack {
+                            Image(systemName: "square.on.square")
+                                .foregroundColor(.accentColor)
+                            Text("Stack pinned items")
+                        }
+                    }
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+
+                    if folderStackPinned {
+                        HStack {
+                            Text("Min items:")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            TextField("", value: $folderStackThreshold, format: .number)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 50)
+                                .multilineTextAlignment(.trailing)
+                                .controlSize(.small)
+                            Stepper(value: $folderStackThreshold, in: 2...99) {
+                                EmptyView()
+                            }
+                            .controlSize(.small)
+                        }
+                    }
                 }
                 .padding(8)
                 .background(Color.secondary.opacity(0.05))
@@ -822,6 +1141,10 @@ struct FolderSettingsOverlay: View {
                     Button("Cancel") { onDismiss() }.keyboardShortcut(.escape, modifiers: [])
                     Spacer()
                     Button(folderToEdit == nil ? "Create" : "Save") {
+                        if storage.folderNameExists(name, excluding: folderToEdit?.id) {
+                            nameError = "A folder with this name already exists."
+                            return
+                        }
                         let finalEmoji = emoji.isEmpty ? "📁" : emoji
                         var targetID: UUID
                         if let existing = folderToEdit {
@@ -829,18 +1152,21 @@ struct FolderSettingsOverlay: View {
                             updated.emoji = finalEmoji
                             updated.colorHex = color.toHex()
                             updated.appBundleIDs = appBundleIDs
+                            updated.stackPinned = folderStackPinned
+                            updated.stackThreshold = folderStackThreshold
                             storage.updateFolder(updated)
                             targetID = updated.id
                         } else {
                             if name.isEmpty { name = "New Folder" }
-                            storage.createFolder(name: name, emoji: finalEmoji, colorHex: color.toHex(), appBundleIDs: appBundleIDs)
+                            storage.createFolder(name: name, emoji: finalEmoji, colorHex: color.toHex(), appBundleIDs: appBundleIDs, stackPinned: folderStackPinned)
+                            storage.folders[storage.folders.count - 1].stackThreshold = folderStackThreshold
                             targetID = storage.folders.last!.id
                         }
                         storage.saveFolderShortcut(folderID: targetID, type: "open", key: openKey, mod: openMod)
                         storage.saveFolderShortcut(folderID: targetID, type: "move", key: moveKey, mod: moveMod)
                         onSave(targetID)
                     }
-                    .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(name.isEmpty)
+                    .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(name.isEmpty || hasErrors)
                 }
             }
             .padding()
@@ -854,8 +1180,20 @@ struct FolderSettingsOverlay: View {
         }
         .onChange(of: newBundleID) { _, newValue in
             if !newValue.isEmpty, !appBundleIDs.contains(newValue) {
-                appBundleIDs.append(newValue)
+                if let conflict = storage.folder(withBundleID: newValue, excluding: folderToEdit?.id) {
+                    bindingConflictError = "Already bound to \"\(conflict.name)\""
+                } else {
+                    bindingConflictError = nil
+                    appBundleIDs.append(newValue)
+                }
                 newBundleID = ""
+            }
+        }
+        .onChange(of: name) { _, newValue in
+            if !newValue.isEmpty, storage.folderNameExists(newValue, excluding: folderToEdit?.id) {
+                nameError = "A folder with this name already exists."
+            } else {
+                nameError = nil
             }
         }
         .onAppear {
@@ -864,6 +1202,8 @@ struct FolderSettingsOverlay: View {
                 emoji = f.emoji ?? "📁"
                 appBundleIDs = f.appBundleIDs
                 if let hex = f.colorHex, let c = Color(hex: hex) { color = c }
+                folderStackPinned = f.stackPinned
+                folderStackThreshold = f.stackThreshold
                 if let openSc = storage.getFolderShortcut(folderID: f.id, type: "open") {
                     openKey = openSc.key; openMod = openSc.mod
                 }
@@ -875,11 +1215,7 @@ struct FolderSettingsOverlay: View {
     }
     
     private func appName(for bundleID: String) -> String {
-        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-            let path = url.deletingLastPathComponent().lastPathComponent
-            return path.hasSuffix(".app") ? String(path.dropLast(4)) : url.lastPathComponent
-        }
-        return bundleID
+        NSWorkspace.shared.appDisplayName(forBundleID: bundleID)
     }
 }
 
@@ -896,6 +1232,8 @@ class LibraryWindowManager {
         }
         
         close()
+        // Close main popover if open
+        WindowManager.shared.close()
         
         let foldersCount = storage.folders.count
         let estimatedLibHeight = foldersCount == 0 ? 100 : CGFloat(foldersCount * 42) + CGFloat(max(0, foldersCount - 1) * 4) + 16

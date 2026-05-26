@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 import os
 import UserNotifications
 
-class ImagePasteboardProvider: NSObject, NSPasteboardItemDataProvider {
+private class ImagePasteboardProvider: NSObject, NSPasteboardItemDataProvider {
     let url: URL
     
     init(url: URL) {
@@ -43,7 +43,9 @@ class ClipboardMonitor: ObservableObject {
     private let pasteboard = NSPasteboard.general
     private var lastChangeCount: Int
     private var timer: Timer?
-    private var activeProviders: [Any] = []
+    private var activeProviders: [ImagePasteboardProvider] = []
+    private var processingTask: Task<Void, Never>?
+    private var processingGeneration: UInt64 = 0
     
     // Adaptive polling
     private var currentInterval: TimeInterval = 0.5
@@ -109,6 +111,66 @@ class ClipboardMonitor: ObservableObject {
     func stop() {
         timer?.invalidate()
         timer = nil
+        processingTask?.cancel()
+        processingTask = nil
+        activeProviders.removeAll()
+    }
+
+    private func restartMonitoringAfterPaste() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.activeProviders.removeAll()
+            self?.start()
+        }
+    }
+
+    private func shouldContinueProcessing(generation: UInt64) async -> Bool {
+        if Task.isCancelled { return false }
+        return await MainActor.run { self.processingGeneration == generation }
+    }
+
+    private func previewLimit(for itemCount: Int) -> Int {
+        let unlimitedMediaPreviews = UserDefaults.standard.bool(forKey: "unlimitedMediaPreviews")
+        let maxLimit = UserDefaults.standard.integer(forKey: "maxPreviewsLimit")
+        let resolvedMax = maxLimit == 0 ? 10 : maxLimit
+        return unlimitedMediaPreviews ? itemCount : min(itemCount, resolvedMax)
+    }
+
+    private func warmUpThumbnails(urls: [URL], skipFirst: Bool) {
+        let warmURLs = skipFirst ? Array(urls.dropFirst()) : urls
+        guard !warmURLs.isEmpty else { return }
+
+        Task.detached(priority: .background) {
+            for url in warmURLs {
+                if Task.isCancelled { return }
+                _ = await ThumbnailGenerator.shared.generateThumbnail(for: url)
+            }
+        }
+    }
+
+    private func extractURLs(from joined: String) -> [URL] {
+        joined
+            .components(separatedBy: "\n")
+            .filter { !$0.isEmpty }
+            .compactMap { urlString -> URL? in
+                if let url = URL(string: urlString), url.scheme == "file" {
+                    return url
+                }
+                return URL(fileURLWithPath: urlString)
+            }
+    }
+
+    private func writeImageURLsToPasteboard(_ urls: [URL]) {
+        let jpegType = NSPasteboard.PasteboardType(rawValue: "public.jpeg")
+        let providers = urls.map(ImagePasteboardProvider.init)
+        activeProviders = providers
+
+        let items: [NSPasteboardItem] = providers.map { provider in
+            let item = NSPasteboardItem()
+            item.setDataProvider(provider, forTypes: [.png, .tiff, jpegType, .fileURL])
+            return item
+        }
+
+        pasteboard.writeObjects(items)
     }
 
     @MainActor
@@ -132,20 +194,57 @@ class ClipboardMonitor: ObservableObject {
 
     @MainActor
     private func processNewItem() {
-        let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown"
-        let sourceBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-
         let allItems = pasteboard.pasteboardItems ?? []
-        let types = Set(pasteboard.types ?? [])
+        let pbTypes = pasteboard.types ?? []
+        let typeStrings = Set(pbTypes.map { $0.rawValue })
+        
+        var sourceApp = "Unknown"
+        var sourceBundleID: String? = nil
+        var remoteDeviceName: String? = nil
+        let isRemote = typeStrings.contains("com.apple.is-remote-clipboard") || typeStrings.contains("com.apple.is-remote-pasteboard")
+        
+        if isRemote {
+            let syncEnabled = UserDefaults.standard.object(forKey: "syncEnabled") as? Bool ?? true
+            if !syncEnabled {
+                return
+            }
+            if let remoteSourceID = pasteboard.string(forType: NSPasteboard.PasteboardType("org.nspasteboard.source")) {
+                sourceBundleID = remoteSourceID
+                let shortName = remoteSourceID.components(separatedBy: ".").last?.capitalized ?? "App"
+                sourceApp = shortName
+                remoteDeviceName = "Remote (\(shortName))"
+            } else {
+                remoteDeviceName = "Handoff Device"
+            }
+        } else {
+            sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown"
+            sourceBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        }
+
+        if let bundleID = sourceBundleID,
+           let ignoredAppsData = UserDefaults.standard.data(forKey: "ignoredAppBundleIDs"),
+           let ignoredApps = try? JSONDecoder().decode([String].self, from: ignoredAppsData),
+           ignoredApps.contains(bundleID) {
+            // App is ignored, skip
+            return
+        }
 
         // Collect string values immediately on main thread to avoid pasteboard sync issues
-        let urlStr = types.contains(.URL) ? pasteboard.string(forType: .URL) : nil
+        let urlStr = pbTypes.contains(.URL) ? pasteboard.string(forType: .URL) : nil
         let plainTextStr = pasteboard.string(forType: .string)
 
-        Task.detached {
+        processingTask?.cancel()
+        processingGeneration &+= 1
+        let generation = processingGeneration
+
+        processingTask = Task.detached(priority: .utility) { [weak self] in
+            guard let self else { return }
+            guard await self.shouldContinueProcessing(generation: generation) else { return }
+
             // 1. Multi-file / single-file: collect ALL file URLs from every pasteboard item
             var fileURLs: [URL] = []
             for pbItem in allItems {
+                if await !self.shouldContinueProcessing(generation: generation) { return }
                 if let data = pbItem.data(forType: .fileURL),
                    let str = String(data: data, encoding: .utf8),
                    let url = URL(string: str) {
@@ -154,52 +253,58 @@ class ClipboardMonitor: ObservableObject {
             }
 
             if !fileURLs.isEmpty {
-                // Determine file type and metadata
                 var exts = Set<String>()
                 var totalSize: Int64 = 0
                 for url in fileURLs {
+                    if await !self.shouldContinueProcessing(generation: generation) { return }
                     exts.insert(url.pathExtension.lowercased())
-                    if fileURLs.count < 1000 {
-                        if let attr = try? FileManager.default.attributesOfItem(atPath: url.path),
-                           let size = attr[.size] as? Int64 {
-                            totalSize += size
-                        }
+                    if fileURLs.count < 1000,
+                       let attr = try? FileManager.default.attributesOfItem(atPath: url.path),
+                       let size = attr[.size] as? Int64 {
+                        totalSize += size
                     }
                 }
-                
+
                 var itemType: ItemType = .file
                 let isImageOnly = exts.allSatisfy { ["jpg", "jpeg", "png", "gif", "webp", "heic", "svg", "bmp", "tiff", "raw"].contains($0) }
                 if isImageOnly && !exts.isEmpty {
                     itemType = .image
                 }
-                
+
                 var item = ClipboardItem(
-                    timestamp: Date(), 
-                    firstCopiedAt: Date(), 
+                    timestamp: Date(),
+                    firstCopiedAt: Date(),
                     type: itemType,
                     textContent: fileURLs.map { $0.absoluteString }.joined(separator: "\n"),
                     title: fileURLs.count > 1 ? "\(fileURLs.count) files" : fileURLs.first?.lastPathComponent,
                     fileURL: fileURLs.first,
-                    appSource: sourceApp, 
+                    remoteDeviceName: remoteDeviceName,
+                    appSource: sourceApp,
                     appBundleID: sourceBundleID,
                     extensions: Array(exts),
                     fileCount: fileURLs.count,
                     totalSizeBytes: totalSize,
                     thumbStatus: ThumbStatus.pending.rawValue
                 )
-                
-                // Generate thumbs for up to 50 items if many
-                let limit = fileURLs.count > 500 ? 50 : fileURLs.count
-                for (index, url) in fileURLs.prefix(limit).enumerated() {
-                    let (thumbURL, status) = await ThumbnailGenerator.shared.generateThumbnail(for: url)
-                    if index == 0 {
-                        item.thumbPath = thumbURL?.path
-                        item.thumbStatus = status.rawValue
+
+                let disableMediaPreviews = UserDefaults.standard.bool(forKey: "disableMediaPreviews")
+                if !disableMediaPreviews,
+                   let firstURL = fileURLs.first {
+                    let (thumbURL, status) = await ThumbnailGenerator.shared.generateThumbnail(for: firstURL)
+                    guard await self.shouldContinueProcessing(generation: generation) else { return }
+                    item.thumbPath = thumbURL?.path
+                    item.thumbStatus = status.rawValue
+
+                    let warmLimit = fileURLs.count > 500 ? 50 : fileURLs.count
+                    if warmLimit > 1 {
+                        self.warmUpThumbnails(urls: Array(fileURLs.prefix(warmLimit)), skipFirst: true)
                     }
                 }
-                
+
                 let finalItem = item
+                guard await self.shouldContinueProcessing(generation: generation) else { return }
                 await MainActor.run {
+                    guard self.processingGeneration == generation else { return }
                     self.handleCopyFeedback(for: finalItem)
                 }
                 return
@@ -207,35 +312,36 @@ class ClipboardMonitor: ObservableObject {
 
             // 2. Images — try MANY ways to extract ALL images (from data, not files)
             var imageURLs: [URL] = []
-            
-            // Method 1: Direct iteration through pasteboardItems
+
             for pbItem in allItems {
+                if await !self.shouldContinueProcessing(generation: generation) { return }
                 autoreleasepool {
                     if let pngData = pbItem.data(forType: .png) {
-                        if let url = self.savePNGToDiskAndReturnURL(data: pngData, source: sourceApp, bundleID: sourceBundleID) {
+                            if let url = self.savePNGToDiskAndReturnURL(data: pngData) {
+
                             imageURLs.append(url)
                         }
                     } else if let tiffData = pbItem.data(forType: .tiff) {
                         if let pngData = self.extractPNGFromTIFF(tiffData) {
-                            if let url = self.savePNGToDiskAndReturnURL(data: pngData, source: sourceApp, bundleID: sourceBundleID) {
+                        if let url = self.savePNGToDiskAndReturnURL(data: pngData) {
+
                                 imageURLs.append(url)
                             }
                         }
                     } else if let jpgData = pbItem.data(forType: NSPasteboard.PasteboardType(rawValue: "public.jpeg")) {
-                        if let url = self.savePNGToDiskAndReturnURL(data: jpgData, source: sourceApp, bundleID: sourceBundleID) {
+                        if let url = self.savePNGToDiskAndReturnURL(data: jpgData) {
                             imageURLs.append(url)
                         }
                     }
                 }
             }
-            
-            // Method 2: Try NSImage fallback if nothing found
-            if imageURLs.isEmpty && (types.contains(.tiff) || types.contains(.png)) {
+
+            if imageURLs.isEmpty && (pbTypes.contains(.tiff) || pbTypes.contains(.png)) {
                 let fallbackURL: URL? = await MainActor.run {
                     if NSImage.canInit(with: self.pasteboard),
                        let image = NSImage(pasteboard: self.pasteboard),
                        let data = self.renderImageToPNG(image) {
-                        return self.savePNGToDiskAndReturnURL(data: data, source: sourceApp, bundleID: sourceBundleID)
+                        return self.savePNGToDiskAndReturnURL(data: data)
                     }
                     return nil
                 }
@@ -243,48 +349,67 @@ class ClipboardMonitor: ObservableObject {
                     imageURLs.append(url)
                 }
             }
-            
+
             if !imageURLs.isEmpty {
                 var item = ClipboardItem(
-                    timestamp: Date(), 
-                    firstCopiedAt: Date(), 
+                    timestamp: Date(),
+                    firstCopiedAt: Date(),
                     type: .image,
                     textContent: imageURLs.map { $0.absoluteString }.joined(separator: "\n"),
                     title: imageURLs.count > 1 ? "\(imageURLs.count) images" : "Image",
                     fileURL: imageURLs.first,
+                    remoteDeviceName: remoteDeviceName,
                     sizeLabel: "\(imageURLs.count) image\(imageURLs.count > 1 ? "s" : "")",
-                    appSource: sourceApp, 
+                    appSource: sourceApp,
                     appBundleID: sourceBundleID,
                     extensions: ["jpg"],
                     fileCount: imageURLs.count,
                     thumbStatus: ThumbStatus.pending.rawValue
                 )
-                
-                for (index, url) in imageURLs.enumerated() {
-                    let (thumbURL, status) = await ThumbnailGenerator.shared.generateThumbnail(for: url)
-                    if index == 0 {
-                        item.thumbPath = thumbURL?.path
-                        item.thumbStatus = status.rawValue
+
+                let disableMediaPreviews = UserDefaults.standard.bool(forKey: "disableMediaPreviews")
+                if !disableMediaPreviews,
+                   let firstURL = imageURLs.first {
+                    let (thumbURL, status) = await ThumbnailGenerator.shared.generateThumbnail(for: firstURL)
+                    guard await self.shouldContinueProcessing(generation: generation) else { return }
+                    item.thumbPath = thumbURL?.path
+                    item.thumbStatus = status.rawValue
+
+                    let limit = self.previewLimit(for: imageURLs.count)
+                    if limit > 1 {
+                        self.warmUpThumbnails(urls: Array(imageURLs.prefix(limit)), skipFirst: true)
                     }
                 }
-                
+
                 let finalItem = item
+                guard await self.shouldContinueProcessing(generation: generation) else { return }
                 await MainActor.run {
+                    guard self.processingGeneration == generation else { return }
                     self.handleCopyFeedback(for: finalItem)
                 }
                 return
             }
 
             // 3. URLs / Links
-            if let urlStr = urlStr, !urlStr.isEmpty {
+            var detectedURL = urlStr
+            if (detectedURL == nil || detectedURL!.isEmpty), let text = plainTextStr {
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let url = URL(string: trimmed), let scheme = url.scheme?.lowercased(), ["http", "https"].contains(scheme) {
+                    detectedURL = trimmed
+                }
+            }
+            
+            if let linkStr = detectedURL, !linkStr.isEmpty {
                 let item = ClipboardItem(
                     timestamp: Date(), firstCopiedAt: Date(), type: .link,
-                    textContent: urlStr, title: urlStr,
+                    textContent: linkStr, title: linkStr,
+                    remoteDeviceName: remoteDeviceName,
                     appSource: sourceApp, appBundleID: sourceBundleID
                 )
-                let finalItem = item
+                guard await self.shouldContinueProcessing(generation: generation) else { return }
                 await MainActor.run {
-                    self.handleCopyFeedback(for: finalItem)
+                    guard self.processingGeneration == generation else { return }
+                    self.handleCopyFeedback(for: item)
                 }
                 return
             }
@@ -295,11 +420,13 @@ class ClipboardMonitor: ObservableObject {
                 let item = ClipboardItem(
                     timestamp: Date(), firstCopiedAt: Date(), type: .text,
                     textContent: text, title: displayText,
+                    remoteDeviceName: remoteDeviceName,
                     appSource: sourceApp, appBundleID: sourceBundleID
                 )
-                let finalItem = item
+                guard await self.shouldContinueProcessing(generation: generation) else { return }
                 await MainActor.run {
-                    self.handleCopyFeedback(for: finalItem)
+                    guard self.processingGeneration == generation else { return }
+                    self.handleCopyFeedback(for: item)
                 }
             }
         }
@@ -379,7 +506,7 @@ class ClipboardMonitor: ObservableObject {
         return currentRep
     }
 
-    private func savePNGToDiskAndReturnURL(data: Data, source: String, bundleID: String?) -> URL? {
+    private func savePNGToDiskAndReturnURL(data: Data) -> URL? {
         let base = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
             .appendingPathComponent("SkyPaste/Images", isDirectory: true)
@@ -387,23 +514,19 @@ class ClipboardMonitor: ObservableObject {
         do {
             try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
             
-            guard let image = NSImage(data: data) else { return nil }
-            guard let tiff = image.tiffRepresentation,
-                  let rep = NSBitmapImageRep(data: tiff) else { return nil }
-            
             let maxSize: Int = 2_000_000
             var finalData: Data = data
             var ext = "png"
-            
+
             if data.count > maxSize {
-                if let jpegData = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.85]) {
-                    finalData = jpegData
-                    ext = "jpg"
+                guard let image = NSImage(data: data),
+                      let tiff = image.tiffRepresentation,
+                      let rep = NSBitmapImageRep(data: tiff),
+                      let jpegData = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.85]) else {
+                    return nil
                 }
-            } else {
-                if let pngData = rep.representation(using: .png, properties: [:]) {
-                    finalData = pngData
-                }
+                finalData = jpegData
+                ext = "jpg"
             }
             
             let fileName = UUID().uuidString + "." + ext
@@ -411,17 +534,10 @@ class ClipboardMonitor: ObservableObject {
             try finalData.write(to: url, options: .atomic)
             return url
         } catch {
-            print("Failed to save image: \(error)")
             return nil
         }
     }
     
-    private func isImageFile(_ url: URL) -> Bool {
-        let imageExtensions = ["png", "jpg", "jpeg", "gif", "tiff", "bmp", "webp", "heic"]
-        let pathExtension = url.pathExtension.lowercased()
-        return imageExtensions.contains(pathExtension)
-    }
-
     // MARK: - Pasteboard write-back
 
     func copyToPasteboard(item: ClipboardItem, plainTextOnly: Bool) {
@@ -434,9 +550,7 @@ class ClipboardMonitor: ObservableObject {
             }
             lastChangeCount = pasteboard.changeCount
             sendNotification(title: "Pasted from SkyPaste", body: item.title ?? "Plain Text")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-                self?.start()
-            }
+            restartMonitoringAfterPaste()
             return
         }
 
@@ -447,33 +561,16 @@ class ClipboardMonitor: ObservableObject {
             }
         case .image:
             if let joined = item.textContent {
-                let imageURLs: [URL] = joined
-                    .components(separatedBy: "\n")
-                    .filter { !$0.isEmpty }
-                    .compactMap { urlString -> URL? in
-                        if let url = URL(string: urlString) {
-                            if url.scheme == "file" { return url }
-                        }
-                        return URL(fileURLWithPath: urlString)
-                    }
-                let images = imageURLs.compactMap { NSImage(contentsOf: $0) }
-                if !images.isEmpty {
-                    pasteboard.writeObjects(images)
+                let imageURLs = extractURLs(from: joined)
+                if !imageURLs.isEmpty {
+                    writeImageURLsToPasteboard(imageURLs)
                 }
-            } else if let url = item.fileURL, let img = NSImage(contentsOf: url) {
-                pasteboard.writeObjects([img])
+            } else if let url = item.fileURL {
+                writeImageURLsToPasteboard([url])
             }
         case .file:
             if let joined = item.textContent {
-                let urls: [URL] = joined
-                    .components(separatedBy: "\n")
-                    .filter { !$0.isEmpty }
-                    .compactMap { urlString -> URL? in
-                        if let url = URL(string: urlString) {
-                            if url.scheme == "file" { return url }
-                        }
-                        return URL(fileURLWithPath: urlString)
-                    }
+                let urls = extractURLs(from: joined)
                 pasteboard.writeObjects(urls as [NSURL])
                 let legacyType = NSPasteboard.PasteboardType("NSFilenamesPboardType")
                 pasteboard.addTypes([legacyType], owner: nil)
@@ -491,9 +588,7 @@ class ClipboardMonitor: ObservableObject {
 
         lastChangeCount = pasteboard.changeCount
         sendNotification(title: "Pasted from SkyPaste", body: item.title ?? "Clipboard Item")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            self?.start()
-        }
+        restartMonitoringAfterPaste()
     }
 
     @MainActor

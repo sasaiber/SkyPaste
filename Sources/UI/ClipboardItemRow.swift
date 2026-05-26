@@ -21,6 +21,7 @@ struct ClipboardItemRow: View {
     @State private var isPopoverHovered: Bool = false
     @State private var hideTask: DispatchWorkItem? = nil
     @State private var loadedThumbnails: [URL: NSImage] = [:]
+    private let loadedThumbnailsSoftLimit: Int = 80
     
     @State private var selectedURLs: Set<URL> = []
     @State private var innerHoveredURL: URL? = nil
@@ -44,50 +45,44 @@ struct ClipboardItemRow: View {
 
     
     private func formatShortcut(key: String, modifiers: Int) -> String {
-        let flags = NSEvent.ModifierFlags(rawValue: UInt(modifiers))
-        var str = ""
-        if flags.contains(.control) { str += "⌃" }
-        if flags.contains(.option) { str += "⌥" }
-        if flags.contains(.shift) { str += "⇧" }
-        if flags.contains(.command) { str += "⌘" }
-        return str + key.uppercased()
+        modifiers.shortcutSymbolString + key.uppercased()
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
+        HStack(alignment: .center, spacing: 8) {
             // 1. App Icon
             if let icon = getAppIcon(bundleID: item.appBundleID) {
                 Image(nsImage: icon)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 24, height: 24)
+                    .frame(width: 20, height: 20)
             } else {
                 iconForType(item.type)
-                    .font(.system(size: 18))
+                    .font(.system(size: 15))
                     .foregroundColor(.accentColor)
-                    .frame(width: 24, height: 24)
+                    .frame(width: 20, height: 20)
             }
             
             // 2. Main Content
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 1) {
                 if item.type == .image || item.type == .file {
                     let urls = extractURLs(from: item)
                     if let title = item.title {
                         Text(title)
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
                             .lineLimit(1)
                             .foregroundColor(.accentColor)
                     }
                     
                     if urls.count == 1 {
                         Text(urls[0].path)
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(.system(size: 8, design: .monospaced))
                             .lineLimit(1)
                             .foregroundColor(.secondary)
                             .truncationMode(.middle)
                     } else if !urls.isEmpty {
                         Text(urls.map { $0.lastPathComponent }.joined(separator: ", "))
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(.system(size: 8, design: .monospaced))
                             .lineLimit(1)
                             .foregroundColor(.secondary)
                             .truncationMode(.tail)
@@ -101,7 +96,7 @@ struct ClipboardItemRow: View {
                     let text = item.textContent ?? "Empty"
                     let displayText = showSpecialSymbols ? replaceSpecialSymbols(text) : text
                     Text(displayText)
-                        .font(.system(size: 12, weight: .regular, design: .rounded))
+                        .font(.system(size: 11, weight: .regular, design: .rounded))
                         .lineLimit(1)
                         .multilineTextAlignment(.leading)
                 }
@@ -111,36 +106,42 @@ struct ClipboardItemRow: View {
             
             // 3. Trailing: persistent pin + hover actions + time
             HStack(spacing: 6) {
-                // Pin — always shown if pinned, shown on hover otherwise
-                Button(action: { onPin?() }) {
-                    Image(systemName: item.isPinned ? "pin.fill" : "pin")
-                        .font(.system(size: 14))
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(item.isPinned ? .accentColor : .secondary)
-                .opacity(item.isPinned || isHovered ? 1 : 0)
-                .animation(.easeInOut(duration: 0.15), value: isHovered)
-                
                 if isHovered {
-                    Menu {
-                        ForEach(folders) { folder in
-                            Button("\(folder.displayEmoji) \(folder.name)") {
-                                onAssignToFolder?(folder.id)
-                            }
+                    if folders.isEmpty {
+                        Button(action: { onCreateFolder?(nil) }) {
+                            Image(systemName: "folder.badge.plus")
+                                .font(.system(size: 14))
                         }
-                        if item.folderID != nil {
-                            Divider()
-                            Button("Remove from Folder") {
-                                onAssignToFolder?(nil)
+                        .buttonStyle(.plain)
+                        .foregroundColor(.secondary)
+                        .help("Create New Folder")
+                    } else {
+                        Menu {
+                            Button(action: { onCreateFolder?(nil) }) {
+                                Label("Create New Folder...", systemImage: "folder.badge.plus")
                             }
+                            if !folders.isEmpty {
+                                Divider()
+                                ForEach(folders) { folder in
+                                    Button("\(folder.displayEmoji) \(folder.name)") {
+                                        onAssignToFolder?(folder.id)
+                                    }
+                                }
+                            }
+                            if item.folderID != nil {
+                                Divider()
+                                Button("Remove from Folder") {
+                                    onAssignToFolder?(nil)
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "folder.badge.plus")
+                                .font(.system(size: 14))
                         }
-                    } label: {
-                        Image(systemName: "folder.badge.plus")
-                            .font(.system(size: 14))
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                        .foregroundColor(.secondary)
                     }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
-                    .foregroundColor(.secondary)
                     
                     // Only show delete if item isn't in a folder, or we're inside that folder
                     if item.folderID == nil || selectedFolderID == item.folderID {
@@ -153,19 +154,23 @@ struct ClipboardItemRow: View {
                     }
                 } else {
                     Text(timeAgoDisplay(date: item.timestamp))
-                        .font(.caption2)
+                        .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                         .fixedSize()
                 }
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
         .contentShape(Rectangle())
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isHovered ? Color.primary.opacity(0.06) : (item.isPinned ? Color.accentColor.opacity(0.05) : Color.clear))
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(isHovered ? Color.primary.opacity(0.08) : (item.isPinned ? Color.accentColor.opacity(0.08) : Color.clear))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(item.isPinned ? Color.accentColor.opacity(0.15) : .clear, lineWidth: 0.5)
+                )
         )
         // Edge Popover for metadata & full text
         .popover(isPresented: $showFullText, attachmentAnchor: .rect(.bounds), arrowEdge: .trailing) {
@@ -232,6 +237,10 @@ struct ClipboardItemRow: View {
         .onReceive(NotificationCenter.default.publisher(for: NSMenu.didEndTrackingNotification)) { _ in
             isSystemMenuOpen = false
         }
+        .onDisappear {
+            // Free the @State memory when the row scrolls out of view
+            loadedThumbnails.removeAll()
+        }
     }
     
     // Extracted Popover view
@@ -247,8 +256,14 @@ struct ClipboardItemRow: View {
                         .frame(width: 20, height: 20)
                 }
                 VStack(alignment: .leading) {
-                    Text(item.appSource ?? "Unknown")
-                        .font(.headline)
+                    Group {
+                        if let device = item.remoteDeviceName {
+                            Text(device)
+                        } else {
+                            Text(item.appSource ?? "Unknown")
+                        }
+                    }
+                    .font(.headline)
                     Text("\(formatFullDate(item.timestamp))")
                         .font(.caption2)
                         .foregroundColor(.secondary)
@@ -275,6 +290,9 @@ struct ClipboardItemRow: View {
                 Text("⌥+Click to Paste Plain")
                 Text("⇧+Click to Toggle Select")
                 Text("⌘+Click to Select Single")
+                Text("·")
+                    .foregroundColor(.secondary.opacity(0.4))
+                Text("⌘+Drag to D&D")
             }
             .font(.system(size: 9, weight: .medium, design: .rounded))
             .foregroundColor(.secondary)
@@ -359,13 +377,17 @@ struct ClipboardItemRow: View {
                                             if storage.popoverHoveredURL == url { storage.popoverHoveredURL = nil }
                                         }
                                     }
-                                     .onTapGesture {
-                                         let flags = NSEvent.modifierFlags
-                                         if flags.contains(.command) {
-                                             // ⌘+Click: Select ONLY this one file (single selection)
-                                             selectedURLs = [url]
-                                             storage.popoverSelectedURLs = [url]
-                                         } else if flags.contains(.shift) {
+                                      .onTapGesture {
+                                          let flags = NSEvent.modifierFlags
+                                          if flags.contains(.command) {
+                                              // ⌘+Click: Toggle this file in selection (multi-select)
+                                              if selectedURLs.contains(url) {
+                                                  selectedURLs.remove(url)
+                                              } else {
+                                                  selectedURLs.insert(url)
+                                              }
+                                              storage.popoverSelectedURLs = Array(selectedURLs)
+                                          } else if flags.contains(.shift) {
                                             // ⇧+Click: Toggle Select
                                             if selectedURLs.contains(url) { selectedURLs.remove(url) }
                                             else { selectedURLs.insert(url) }
@@ -459,11 +481,11 @@ struct ClipboardItemRow: View {
                                             Image(systemName: "trash")
                                         }
                                     }
-                                    .onDrag {
-                                        let urlsToDrag = selectedURLs.isEmpty ? [url] : (selectedURLs.contains(url) ? Array(selectedURLs) : [url])
-                                        let provider = NSItemProvider(object: urlsToDrag.first! as NSURL)
-                                        return provider
-                                    }
+                                    .multiFileDraggable(
+                                        urls: selectedURLs.isEmpty
+                                            ? [url]
+                                            : (selectedURLs.contains(url) ? Array(selectedURLs) : [url])
+                                    )
                                 }
                             }
                             .padding(.horizontal, 6)
@@ -520,18 +542,51 @@ struct ClipboardItemRow: View {
         }
     }
     
-    private func timeAgoDisplay(date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        formatter.locale = Locale(identifier: "en_US")
-        return formatter.localizedString(for: date, relativeTo: Date())
-    }
-    
-    private func formatFullDate(_ date: Date) -> String {
+    @AppStorage("timeFormat") private var timeFormat: String = "24h"
+
+    private static let timeFormatter24h: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
+
+    private static let timeFormatterAMPM: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return formatter
+    }()
+
+    private static let dayMonthFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d MMM"
+        return formatter
+    }()
+
+    private static let dayMonthYearFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d MMM yyyy"
+        return formatter
+    }()
+
+    private static let fullDateTimeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "d MMM yyyy, HH:mm"
         formatter.locale = Locale(identifier: "en_US")
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private func timeAgoDisplay(date: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(date) {
+            return (timeFormat == "ampm" ? Self.timeFormatterAMPM : Self.timeFormatter24h).string(from: date)
+        }
+
+        let isCurrentYear = cal.isDate(date, equalTo: Date(), toGranularity: .year)
+        return (isCurrentYear ? Self.dayMonthFormatter : Self.dayMonthYearFormatter).string(from: date)
+    }
+    
+    private func formatFullDate(_ date: Date) -> String {
+        Self.fullDateTimeFormatter.string(from: date)
     }
     
     private func replaceSpecialSymbols(_ text: String) -> String {
@@ -540,11 +595,32 @@ struct ClipboardItemRow: View {
             .replacingOccurrences(of: "\r", with: "↵ ")
     }
     
+    private func cacheLocalThumbnail(_ image: NSImage, for key: URL) {
+        if loadedThumbnails.count >= loadedThumbnailsSoftLimit,
+           let firstKey = loadedThumbnails.keys.first {
+            loadedThumbnails.removeValue(forKey: firstKey)
+        }
+        loadedThumbnails[key] = image
+    }
+
     private func getAppIcon(bundleID: String?) -> NSImage? {
         guard let bundleID = bundleID else { return nil }
-        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-            return NSWorkspace.shared.icon(forFile: url.path)
+        let cacheKey = URL(string: "appicon://\(bundleID)")!
+        
+        if let cached = ImageCache.shared.image(for: cacheKey) {
+            return cached
         }
+        
+        if let loaded = loadedThumbnails[cacheKey] {
+            return loaded
+        }
+        
+        ImageCache.shared.asyncAppIcon(bundleID: bundleID) { img in
+            if let img = img {
+                self.cacheLocalThumbnail(img, for: cacheKey)
+            }
+        }
+        
         return nil
     }
     
@@ -568,25 +644,65 @@ struct ClipboardItemRow: View {
     
     private func getIcon(for url: URL) -> NSImage {
         if !disableMediaPreviews,
-           let thumbURL = ThumbnailGenerator.shared.getExistingThumbnailURL(for: url),
-           let img = NSImage(contentsOf: thumbURL) {
-            return img
+           let thumbURL = ThumbnailGenerator.shared.getExistingThumbnailURL(for: url) {
+            if let cached = ImageCache.shared.image(for: thumbURL) {
+                return cached
+            }
+            if let loaded = loadedThumbnails[thumbURL] {
+                return loaded
+            }
+            ImageCache.shared.asyncThumbnail(url: thumbURL) { img in
+                if let img = img {
+                    self.cacheLocalThumbnail(img, for: thumbURL)
+                }
+            }
         }
-        return NSWorkspace.shared.icon(forFile: url.path)
+        
+        return getFileIcon(for: url)
     }
     
     /// Returns a rich thumbnail for items within the preview limit, plain file icon for the rest.
     private func getPreviewIcon(for url: URL, at index: Int) -> NSImage {
         if disableMediaPreviews {
-            return NSWorkspace.shared.icon(forFile: url.path)
+            return getFileIcon(for: url)
         }
         let limit = unlimitedMediaPreviews ? Int.max : max(0, maxPreviewsLimit)
         if index < limit,
-           let thumbURL = ThumbnailGenerator.shared.getExistingThumbnailURL(for: url),
-           let img = NSImage(contentsOf: thumbURL) {
-            return img
+           let thumbURL = ThumbnailGenerator.shared.getExistingThumbnailURL(for: url) {
+            if let cached = ImageCache.shared.image(for: thumbURL) {
+                return cached
+            }
+            if let loaded = loadedThumbnails[thumbURL] {
+                return loaded
+            }
+            ImageCache.shared.asyncThumbnail(url: thumbURL) { img in
+                if let img = img {
+                    self.cacheLocalThumbnail(img, for: thumbURL)
+                }
+            }
         }
-        return NSWorkspace.shared.icon(forFile: url.path)
+        return getFileIcon(for: url)
+    }
+    
+    private func getFileIcon(for url: URL) -> NSImage {
+        let ext = url.pathExtension.isEmpty ? "default" : url.pathExtension.lowercased()
+        let cacheKey = URL(string: "fileicon://\(ext)")!
+        
+        if let cached = ImageCache.shared.image(for: cacheKey) {
+            return cached
+        }
+        if let loaded = loadedThumbnails[cacheKey] {
+            return loaded
+        }
+        
+        ImageCache.shared.asyncFileIcon(url: url) { img in
+            if let img = img {
+                self.cacheLocalThumbnail(img, for: cacheKey)
+            }
+        }
+        
+        // Return a generic fallback while loading to avoid lag
+        return NSImage(systemSymbolName: "doc", accessibilityDescription: nil) ?? NSImage()
     }
     
     @ViewBuilder
@@ -597,27 +713,27 @@ struct ClipboardItemRow: View {
             Image(nsImage: getIcon(for: first))
                 .resizable()
                 .scaledToFill()
-                .frame(width: 48, height: 48)
-                .cornerRadius(6)
+                .frame(width: 36, height: 36)
+                .cornerRadius(4)
                 .clipped()
         } else if count >= 2 && count <= 9 {
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(24), spacing: 2), count: min(3, count)), spacing: 2) {
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(20), spacing: 2), count: min(3, count)), spacing: 2) {
                 ForEach(urls.prefix(count), id: \.self) { url in
                     Image(nsImage: getIcon(for: url))
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 24, height: 24)
-                        .cornerRadius(4)
+                        .frame(width: 20, height: 20)
+                        .cornerRadius(3)
                         .clipped()
                 }
             }
         } else if count >= 10 && count <= 99 {
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(16), spacing: 2), count: 3), spacing: 2) {
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(14), spacing: 1), count: 3), spacing: 1) {
                 ForEach(urls.prefix(9), id: \.self) { url in
                     Image(nsImage: getIcon(for: url))
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 16, height: 16)
+                        .frame(width: 14, height: 14)
                         .cornerRadius(2)
                         .clipped()
                 }
