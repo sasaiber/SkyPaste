@@ -467,11 +467,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
         
         let preferencesView = PreferencesView(storage: self.globalStore)
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 450, height: 400),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 450),
                               styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
         window.center()
         window.title = "SkyPaste Settings"
         window.contentViewController = NSHostingController(rootView: preferencesView)
+        window.contentMinSize = NSSize(width: 500, height: 450)
         window.isReleasedWhenClosed = false
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
