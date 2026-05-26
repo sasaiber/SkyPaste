@@ -468,10 +468,29 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         let preferencesView = PreferencesView(storage: self.globalStore)
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 450),
-                              styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
+                              styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.center()
         window.title = "SkyPaste Settings"
-        window.contentViewController = NSHostingController(rootView: preferencesView)
+        window.titlebarAppearsTransparent = true
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        
+        let visualEffect = NSVisualEffectView()
+        visualEffect.blendingMode = .behindWindow
+        visualEffect.material = .hudWindow
+        visualEffect.state = .active
+        
+        let host = NSHostingController(rootView: preferencesView)
+        host.view.translatesAutoresizingMaskIntoConstraints = false
+        visualEffect.addSubview(host.view)
+        NSLayoutConstraint.activate([
+            host.view.topAnchor.constraint(equalTo: visualEffect.topAnchor),
+            host.view.bottomAnchor.constraint(equalTo: visualEffect.bottomAnchor),
+            host.view.leadingAnchor.constraint(equalTo: visualEffect.leadingAnchor),
+            host.view.trailingAnchor.constraint(equalTo: visualEffect.trailingAnchor)
+        ])
+        
+        window.contentView = visualEffect
         window.contentMinSize = NSSize(width: 500, height: 450)
         window.isReleasedWhenClosed = false
         window.makeKeyAndOrderFront(nil)

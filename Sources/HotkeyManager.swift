@@ -97,7 +97,7 @@ class FloatingPanel: NSPanel, NSWindowDelegate {
         
         super.init(
             contentRect: contentRect,
-            styleMask: [.borderless],
+            styleMask: [.borderless, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -122,7 +122,21 @@ class FloatingPanel: NSPanel, NSWindowDelegate {
         standardWindowButton(.miniaturizeButton)?.isHidden = true
         standardWindowButton(.zoomButton)?.isHidden = true
         
-        self.contentView = contentView
+        let visualEffect = NSVisualEffectView()
+        visualEffect.blendingMode = .behindWindow
+        visualEffect.material = .hudWindow
+        visualEffect.state = .active
+        
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        visualEffect.addSubview(contentView)
+        NSLayoutConstraint.activate([
+            contentView.topAnchor.constraint(equalTo: visualEffect.topAnchor),
+            contentView.bottomAnchor.constraint(equalTo: visualEffect.bottomAnchor),
+            contentView.leadingAnchor.constraint(equalTo: visualEffect.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: visualEffect.trailingAnchor)
+        ])
+        
+        self.contentView = visualEffect
         
         // Position
         let origin = computeOrigin(size: contentRect.size, position: position, button: statusBarButton)

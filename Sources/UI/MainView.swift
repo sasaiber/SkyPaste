@@ -13,19 +13,36 @@ class PreviewWindowManager {
             win.titleVisibility = .hidden
             win.titlebarAppearsTransparent = true
             win.isReleasedWhenClosed = false
+            win.isOpaque = false
+            win.backgroundColor = .clear
             win.center()
             self.window = win
         }
         guard let img = NSImage(contentsOf: url) else { return }
         
         let view = ZStack {
-            Color.black.ignoresSafeArea()
+            Color.clear.ignoresSafeArea()
             Image(nsImage: img).resizable().scaledToFit().padding()
         }.onTapGesture {
             self.window?.close()
         }
         
-        window?.contentView = NSHostingView(rootView: view)
+        let visualEffect = NSVisualEffectView()
+        visualEffect.blendingMode = .behindWindow
+        visualEffect.material = .hudWindow
+        visualEffect.state = .active
+        
+        let host = NSHostingView(rootView: view)
+        host.translatesAutoresizingMaskIntoConstraints = false
+        visualEffect.addSubview(host)
+        NSLayoutConstraint.activate([
+            host.topAnchor.constraint(equalTo: visualEffect.topAnchor),
+            host.bottomAnchor.constraint(equalTo: visualEffect.bottomAnchor),
+            host.leadingAnchor.constraint(equalTo: visualEffect.leadingAnchor),
+            host.trailingAnchor.constraint(equalTo: visualEffect.trailingAnchor)
+        ])
+        
+        window?.contentView = visualEffect
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
