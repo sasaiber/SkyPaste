@@ -247,8 +247,27 @@ class ClipboardMonitor: ObservableObject {
                 if await !self.shouldContinueProcessing(generation: generation) { return }
                 if let data = pbItem.data(forType: .fileURL),
                    let str = String(data: data, encoding: .utf8),
-                   let url = URL(string: str) {
+                   let url = URL(string: str), url.isFileURL {
                     fileURLs.append(url)
+                }
+            }
+
+            // Workaround for browsers copying images as temporary file URLs
+            let hasImageData = pbTypes.contains(.png) || pbTypes.contains(.tiff) || pbTypes.contains(NSPasteboard.PasteboardType(rawValue: "public.jpeg"))
+            if fileURLs.count == 1 && hasImageData {
+                if let url = fileURLs.first, (url.path.contains("/var/folders/") || url.path.contains("/tmp/") || url.path.contains("/Caches/")) {
+                    var isTempImage = false
+                    if let type = try? url.resourceValues(forKeys: [.contentTypeKey]).contentType {
+                        isTempImage = type.conforms(to: .image)
+                    } else if ["jpg", "jpeg", "png", "gif", "webp", "heic", "svg", "bmp", "tiff"].contains(url.pathExtension.lowercased()) {
+                        isTempImage = true
+                    } else if let _ = NSImage(contentsOf: url) {
+                        isTempImage = true
+                    }
+                    
+                    if isTempImage {
+                        fileURLs.removeAll() // Let Section 2 extract the actual image data from pasteboard
+                    }
                 }
             }
 
