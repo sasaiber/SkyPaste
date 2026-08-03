@@ -42,9 +42,9 @@ cat << 'EOF' > "${CONTENTS_DIR}/Info.plist"
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.7</string>
+    <string>1.0.8</string>
     <key>CFBundleVersion</key>
-    <string>1.0.7</string>
+    <string>1.0.8</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>LSUIElement</key>
@@ -113,6 +113,7 @@ else
     echo "Signing with ad-hoc identity (fallback) — WARNING: Accessibility permissions will reset on every rebuild until you trust '${CERT_NAME}' in Keychain Access!"
 fi
 
+xattr -cr "${APP_DIR}"
 codesign --force --deep --sign "${SIGN_IDENTITY}" "${APP_DIR}"
 
 if [ -d "/Applications/SkyPaste.app" ]; then

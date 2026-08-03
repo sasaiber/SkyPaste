@@ -1,8 +1,19 @@
 import SwiftUI
 import AppKit
 
-struct ClipboardItemRow: View {
-    @ObservedObject var storage: Storage
+struct ClipboardItemRow: View, Equatable {
+    static func == (lhs: ClipboardItemRow, rhs: ClipboardItemRow) -> Bool {
+        lhs.item.id == rhs.item.id &&
+        lhs.item.timestamp == rhs.item.timestamp &&
+        lhs.item.isPinned == rhs.item.isPinned &&
+        lhs.item.copyCount == rhs.item.copyCount &&
+        lhs.item.folderID == rhs.item.folderID &&
+        lhs.hoveredItemID == rhs.hoveredItemID &&
+        lhs.selectedFolderID == rhs.selectedFolderID &&
+        lhs.folders.count == rhs.folders.count
+    }
+
+    var storage: Storage
     let item: ClipboardItem
     let folders: [AppFolder]
     let hoveredItemID: UUID?
@@ -238,7 +249,15 @@ struct ClipboardItemRow: View {
             isSystemMenuOpen = false
         }
         .onDisappear {
-            // Free the @State memory when the row scrolls out of view
+            showFullText = false
+            hideTask?.cancel()
+            hideTask = nil
+            loadedThumbnails.removeAll()
+        }
+        .onChange(of: item.id) { _, _ in
+            showFullText = false
+            hideTask?.cancel()
+            hideTask = nil
             loadedThumbnails.removeAll()
         }
     }
@@ -575,14 +594,23 @@ struct ClipboardItemRow: View {
         return formatter
     }()
 
-    private func timeAgoDisplay(date: Date) -> String {
-        let cal = Calendar.current
-        if cal.isDateInToday(date) {
-            return (timeFormat == "ampm" ? Self.timeFormatterAMPM : Self.timeFormatter24h).string(from: date)
-        }
+    private static let timeDisplayCache = NSCache<NSString, NSString>()
 
-        let isCurrentYear = cal.isDate(date, equalTo: Date(), toGranularity: .year)
-        return (isCurrentYear ? Self.dayMonthFormatter : Self.dayMonthYearFormatter).string(from: date)
+    private func timeAgoDisplay(date: Date) -> String {
+        let key = NSString(string: "\(date.timeIntervalSince1970)_\(timeFormat)")
+        if let cached = Self.timeDisplayCache.object(forKey: key) {
+            return cached as String
+        }
+        let cal = Calendar.current
+        let result: String
+        if cal.isDateInToday(date) {
+            result = (timeFormat == "ampm" ? Self.timeFormatterAMPM : Self.timeFormatter24h).string(from: date)
+        } else {
+            let isCurrentYear = cal.isDate(date, equalTo: Date(), toGranularity: .year)
+            result = (isCurrentYear ? Self.dayMonthFormatter : Self.dayMonthYearFormatter).string(from: date)
+        }
+        Self.timeDisplayCache.setObject(result as NSString, forKey: key)
+        return result
     }
     
     private func formatFullDate(_ date: Date) -> String {
@@ -604,24 +632,7 @@ struct ClipboardItemRow: View {
     }
 
     private func getAppIcon(bundleID: String?) -> NSImage? {
-        guard let bundleID = bundleID else { return nil }
-        let cacheKey = URL(string: "appicon://\(bundleID)")!
-        
-        if let cached = ImageCache.shared.image(for: cacheKey) {
-            return cached
-        }
-        
-        if let loaded = loadedThumbnails[cacheKey] {
-            return loaded
-        }
-        
-        ImageCache.shared.asyncAppIcon(bundleID: bundleID) { img in
-            if let img = img {
-                self.cacheLocalThumbnail(img, for: cacheKey)
-            }
-        }
-        
-        return nil
+        ImageCache.shared.fastAppIcon(bundleID: bundleID)
     }
     
     private func extractURLs(from item: ClipboardItem) -> [URL] {
@@ -685,24 +696,7 @@ struct ClipboardItemRow: View {
     }
     
     private func getFileIcon(for url: URL) -> NSImage {
-        let ext = url.pathExtension.isEmpty ? "default" : url.pathExtension.lowercased()
-        let cacheKey = URL(string: "fileicon://\(ext)")!
-        
-        if let cached = ImageCache.shared.image(for: cacheKey) {
-            return cached
-        }
-        if let loaded = loadedThumbnails[cacheKey] {
-            return loaded
-        }
-        
-        ImageCache.shared.asyncFileIcon(url: url) { img in
-            if let img = img {
-                self.cacheLocalThumbnail(img, for: cacheKey)
-            }
-        }
-        
-        // Return a generic fallback while loading to avoid lag
-        return NSImage(systemSymbolName: "doc", accessibilityDescription: nil) ?? NSImage()
+        ImageCache.shared.fastFileIcon(for: url)
     }
     
     @ViewBuilder

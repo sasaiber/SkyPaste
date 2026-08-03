@@ -4,6 +4,24 @@
         <title>SkyPaste Updates</title>
         
         <item>
+            <title>Version 1.0.8</title>
+            <pubDate>Mon, 03 Aug 2026 12:00:00 +0000</pubDate>
+            <description><![CDATA[
+<ul>
+<li>Оптимизация плавности скроллинга (120 Гц) и снижение нагрузки на CPU/RAM/АКБ.</li>
+<li>Устранен краш при быстром переключении папок горячими клавишами.</li>
+<li>Устранено появление пустого окна Settings при старте приложения.</li>
+</ul>
+            ]]></description>
+            <enclosure url="https://github.com/sasaiber/SkyPaste/releases/download/1.0.8/SkyPaste.zip"
+                       sparkle:version="1.0.8"
+                       sparkle:shortVersionString="1.0.8"
+                       sparkle:edSignature="UHEIpsSnValGORQI2i1OTEmQojfLp8lpjIe6xloVEJwgIvzhXlj2eL6Vs30HA+wPt24+LDql4YAkofBtkx6+Dw=="
+                       length="3687438"
+                       type="application/octet-stream" />
+        </item>
+
+        <item>
             <title>Version 1.0.7</title>
             <pubDate>Thu, 11 Jun 2026 12:00:00 +0000</pubDate>
             <description><![CDATA[

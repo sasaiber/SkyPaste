@@ -11,12 +11,14 @@ struct SkyPasteApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        Settings { Text("Settings") }
-            .commands {
-                CommandGroup(replacing: .saveItem) { }
-                CommandGroup(replacing: .newItem) { }
-                CommandGroup(replacing: .undoRedo) { }
-            }
+        Settings {
+            EmptyView().frame(width: 0, height: 0)
+        }
+        .commands {
+            CommandGroup(replacing: .saveItem) { }
+            CommandGroup(replacing: .newItem) { }
+            CommandGroup(replacing: .undoRedo) { }
+        }
     }
 }
 
@@ -206,6 +208,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         checkAndShowWhatsNew(currentVersion: currentVersion)
+
+        DispatchQueue.main.async {
+            for window in NSApp.windows {
+                if window.title == "Settings" || window.title.isEmpty {
+                    window.orderOut(nil)
+                    window.close()
+                }
+            }
+        }
     }
     
     private func setupNotificationDelegate() {

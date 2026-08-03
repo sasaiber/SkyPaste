@@ -39,6 +39,11 @@ final class _MultiFileDragView: NSView, NSDraggingSource {
         if window != nil { startMonitor() } else { stopMonitor() }
     }
 
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        if newWindow == nil { stopMonitor() }
+    }
+
     deinit { stopMonitor() }
 
     // MARK: - Event Monitor

@@ -39,43 +39,57 @@ final class ThumbnailGenerator: @unchecked Sendable {
         return false
     }
     
+    private let existingThumbsCache = NSCache<NSURL, NSNumber>()
+
     func generateThumbnail(for url: URL) async -> (URL?, ThumbStatus) {
         let ext = url.pathExtension.lowercased()
         let thumbURL = thumbnailURL(for: url)
 
-        if FileManager.default.fileExists(atPath: thumbURL.path) {
+        let alreadyExists = existingThumbsCache.object(forKey: thumbURL as NSURL)?.boolValue == true
+
+        if alreadyExists || FileManager.default.fileExists(atPath: thumbURL.path) {
+            existingThumbsCache.setObject(true as NSNumber, forKey: thumbURL as NSURL)
             return (thumbURL, .ok)
         }
 
+        let result: (URL?, ThumbStatus)
         if imageExts.contains(ext) || videoExts.contains(ext) {
-            return await withCheckedContinuation { continuation in
+            result = await withCheckedContinuation { continuation in
                 queue.addOperation {
                     autoreleasepool {
-                        let result = self.createThumbnailSync(for: url, thumbURL: thumbURL, ext: ext, isBatteryPowered: self.isOnBattery)
-                        continuation.resume(returning: result)
+                        let res = self.createThumbnailSync(for: url, thumbURL: thumbURL, ext: ext, isBatteryPowered: self.isOnBattery)
+                        continuation.resume(returning: res)
+                    }
+                }
+            }
+        } else if docExts.contains(ext), let docResult = await createDocumentThumbnail(for: url, thumbURL: thumbURL, ext: ext) {
+            result = docResult
+        } else {
+            result = await withCheckedContinuation { continuation in
+                queue.addOperation {
+                    autoreleasepool {
+                        let res = self.createFallbackIconThumbnail(for: url, thumbURL: thumbURL)
+                        continuation.resume(returning: res)
                     }
                 }
             }
         }
 
-        if docExts.contains(ext), let result = await createDocumentThumbnail(for: url, thumbURL: thumbURL, ext: ext) {
-            return result
+        if result.1 == .ok {
+            existingThumbsCache.setObject(true as NSNumber, forKey: thumbURL as NSURL)
         }
-
-        return await withCheckedContinuation { continuation in
-            queue.addOperation {
-                autoreleasepool {
-                    let result = self.createFallbackIconThumbnail(for: url, thumbURL: thumbURL)
-                    continuation.resume(returning: result)
-                }
-            }
-        }
+        return result
     }
     
     func getExistingThumbnailURL(for url: URL) -> URL? {
         let thumbURL = thumbnailURL(for: url)
 
+        if existingThumbsCache.object(forKey: thumbURL as NSURL)?.boolValue == true {
+            return thumbURL
+        }
+
         if FileManager.default.fileExists(atPath: thumbURL.path) {
+            existingThumbsCache.setObject(true as NSNumber, forKey: thumbURL as NSURL)
             return thumbURL
         }
         return nil
