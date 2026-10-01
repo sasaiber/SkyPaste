@@ -89,9 +89,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         UserDefaults.standard.register(defaults: [
             "SUEnableAutomaticChecks": true,
-            "SUScheduledCheckInterval": 86400,
+            "SUScheduledCheckInterval": 259200,
             "SUAutomaticallyUpdate": false
         ])
+        // Migrate installs that still carry the old 1-day default; there is no UI for
+        // the interval, so nobody could have set 86400 on purpose.
+        if UserDefaults.standard.integer(forKey: "SUScheduledCheckInterval") == 86400 {
+            UserDefaults.standard.set(259200, forKey: "SUScheduledCheckInterval")
+        }
         
         self.updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil)
         
@@ -100,6 +105,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         updater.automaticallyChecksForUpdates = UserDefaults.standard.bool(forKey: "SUEnableAutomaticChecks")
         updater.updateCheckInterval = TimeInterval(UserDefaults.standard.integer(forKey: "SUScheduledCheckInterval"))
         updater.automaticallyDownloadsUpdates = UserDefaults.standard.bool(forKey: "SUAutomaticallyUpdate")
+        // Don't wait for the first scheduled tick: probe the feed shortly after launch
+        // so a freshly published release is found on the next run.
+        updater.checkForUpdatesInBackground()
         
         self.statusBarItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = self.statusBarItem.button {

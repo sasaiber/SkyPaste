@@ -7,6 +7,8 @@
             <title>Version 1.0.9</title>
             <pubDate>Thu, 01 Oct 2026 12:00:00 +0000</pubDate>
             <description><![CDATA[
+<p><b>⚠️ INSTALL MANUALLY — AUTO-UPDATE IS UNAVAILABLE FOR THIS RELEASE.</b><br/>
+The update signing key had to be replaced, so versions 1.0.8 and older cannot verify or install this update automatically. Download <b>SkyPaste.zip</b> from the release page, quit SkyPaste and replace <b>/Applications/SkyPaste.app</b> manually, then re-grant Accessibility permission if you use Auto-Paste. Automatic updates work again starting from 1.0.9.</p>
 <ul>
 <li>Native Liquid Glass UI on macOS 26 and macOS 27 (with fallback on older systems).</li>
 <li>macOS 27 SDK support and Sparkle 2.10.0.</li>
@@ -20,8 +22,8 @@
             <enclosure url="https://github.com/sasaiber/SkyPaste/releases/download/1.0.9/SkyPaste.zip"
                        sparkle:version="1.0.9"
                        sparkle:shortVersionString="1.0.9"
-                       sparkle:edSignature="TR0oT9f+bd5Q3Fp/Pa7QuQIvGL7isNoHH/8M4Cb5NSZMJ+Nm+eEdBik4BlfacRHe67pc39W5ZSgImvbidSWaDw=="
-                       length="3781237"
+                       sparkle:edSignature="r2eEalxHx2gl0sPqcIylbkRZCONu7dLCt5MA/2MoEsL4lOGNQ8BoSZKg3HbKAvD2GoEPZJGewegsNPRIEe9gDQ=="
+                       length="3781445"
                        type="application/octet-stream" />
         </item>
 
