@@ -29,7 +29,13 @@ class Storage: ObservableObject {
     // Preferences
     @Published var sortOption: SortOption = .newest
     @Published var spawnAtCursor: Bool = true
-    @Published var selectedFolderID: UUID? = nil
+    @Published var selectedFolderID: UUID? = nil {
+        didSet {
+            hoveredItemID = nil
+            popoverSelectedURLs.removeAll()
+            popoverHoveredURL = nil
+        }
+    }
     @Published var hoveredItemID: UUID? = nil
     @Published var showPinnedOnly: Bool = false
     

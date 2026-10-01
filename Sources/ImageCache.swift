@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import UniformTypeIdentifiers
 
 class ImageCache {
     static let shared = ImageCache()
@@ -35,18 +36,46 @@ class ImageCache {
         return max(0, pixels * 4) // RGBA bytes estimate
     }
     
+    func fastAppIcon(bundleID: String?) -> NSImage? {
+        guard let bundleID = bundleID else { return nil }
+        let cacheKey = URL(string: "appicon://\(bundleID)")!
+        if let cached = image(for: cacheKey) {
+            return cached
+        }
+        var icon: NSImage? = nil
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            icon = NSWorkspace.shared.icon(forFile: appURL.path)
+        }
+        if let icon = icon {
+            setImage(icon, for: cacheKey)
+        }
+        return icon
+    }
+
+    func fastFileIcon(for url: URL) -> NSImage {
+        let ext = url.pathExtension.isEmpty ? "default" : url.pathExtension.lowercased()
+        let cacheKey = URL(string: "fileicon://\(ext)")!
+        if let cached = image(for: cacheKey) {
+            return cached
+        }
+        let type = UTType(filenameExtension: ext) ?? .data
+        let icon = NSWorkspace.shared.icon(for: type)
+        setImage(icon, for: cacheKey)
+        return icon
+    }
+
     // Async helpers for row optimization
     func asyncAppIcon(bundleID: String?, completion: @escaping (NSImage?) -> Void) {
+        if let cached = fastAppIcon(bundleID: bundleID) {
+            completion(cached)
+            return
+        }
         guard let bundleID = bundleID else {
             completion(nil)
             return
         }
         
         let cacheKey = URL(string: "appicon://\(bundleID)")!
-        if let cached = image(for: cacheKey) {
-            completion(cached)
-            return
-        }
         
         DispatchQueue.global(qos: .utility).async {
             var icon: NSImage? = nil
@@ -65,19 +94,8 @@ class ImageCache {
     }
     
     func asyncFileIcon(url: URL, completion: @escaping (NSImage?) -> Void) {
-        let ext = url.pathExtension.isEmpty ? "default" : url.pathExtension.lowercased()
-        let cacheKey = URL(string: "fileicon://\(ext)")!
-        if let cached = image(for: cacheKey) {
-            completion(cached)
-            return
-        }
-        DispatchQueue.global(qos: .utility).async {
-            let icon = NSWorkspace.shared.icon(forFile: url.path)
-            DispatchQueue.main.async {
-                self.setImage(icon, for: cacheKey)
-                completion(icon)
-            }
-        }
+        let icon = fastFileIcon(for: url)
+        completion(icon)
     }
     
     func asyncThumbnail(url: URL, completion: @escaping (NSImage?) -> Void) {

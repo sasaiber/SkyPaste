@@ -4,12 +4,12 @@
         <title>SkyPaste Updates</title>
         
         <item>
-            <title>Version 1.0.8</title>
+            <title>Version 1.0.9</title>
             <pubDate>Thu, 01 Oct 2026 12:00:00 +0000</pubDate>
             <description><![CDATA[
 <ul>
 <li>Native Liquid Glass UI on macOS 26 and macOS 27 (with fallback on older systems).</li>
-<li>Sparkle updated to 2.10.0.</li>
+<li>macOS 27 SDK support and Sparkle 2.10.0.</li>
 <li>Fixed a stray empty "Settings" window appearing on launch.</li>
 <li>Fixed sharp square corners around the glass panels.</li>
 <li>Pinned items are now clearly highlighted and adapt to light/dark appearance.</li>
@@ -17,11 +17,29 @@
 <li>New Backup: export and import history, folders and pinned items from Settings &gt; Storage.</li>
 </ul>
             ]]></description>
+            <enclosure url="https://github.com/sasaiber/SkyPaste/releases/download/1.0.9/SkyPaste.zip"
+                       sparkle:version="1.0.9"
+                       sparkle:shortVersionString="1.0.9"
+                       sparkle:edSignature="TR0oT9f+bd5Q3Fp/Pa7QuQIvGL7isNoHH/8M4Cb5NSZMJ+Nm+eEdBik4BlfacRHe67pc39W5ZSgImvbidSWaDw=="
+                       length="3781237"
+                       type="application/octet-stream" />
+        </item>
+
+        <item>
+            <title>Version 1.0.8</title>
+            <pubDate>Mon, 03 Aug 2026 12:00:00 +0000</pubDate>
+            <description><![CDATA[
+<ul>
+<li>Оптимизация плавности скроллинга (120 Гц) и снижение нагрузки на CPU/RAM/АКБ.</li>
+<li>Устранен краш при быстром переключении папок горячими клавишами.</li>
+<li>Устранено появление пустого окна Settings при старте приложения.</li>
+</ul>
+            ]]></description>
             <enclosure url="https://github.com/sasaiber/SkyPaste/releases/download/1.0.8/SkyPaste.zip"
                        sparkle:version="1.0.8"
                        sparkle:shortVersionString="1.0.8"
-                       sparkle:edSignature="g0hR8ghq4MF/qkC34SEn7zlxTOboxbO+ituA3KE/X/xzFLQUAW7f4InE3UN64BwGxYwqYnJU7TIDrILbDVT7DA=="
-                       length="3778854"
+                       sparkle:edSignature="UHEIpsSnValGORQI2i1OTEmQojfLp8lpjIe6xloVEJwgIvzhXlj2eL6Vs30HA+wPt24+LDql4YAkofBtkx6+Dw=="
+                       length="3687438"
                        type="application/octet-stream" />
         </item>
 

@@ -335,7 +335,7 @@ struct MainView: View {
             }
         }
         .onAppear {
-            if shouldStackPinned && isTriggerKeyHeld() {
+            if shouldStackPinned(for: pinnedItems.count) && isTriggerKeyHeld() {
                 pinnedStackExpanded = true
             }
             
@@ -693,7 +693,7 @@ struct MainView: View {
         .padding(.horizontal, 12).padding(.vertical, 8)
     }
     
-    private var shouldStackPinned: Bool {
+    private func shouldStackPinned(for pinnedCount: Int) -> Bool {
         guard pinnedStackEnabled && !storage.showPinnedOnly else { return false }
         let threshold: Int
         if let fid = storage.selectedFolderID, let folder = storage.folders.first(where: { $0.id == fid }) {
@@ -702,7 +702,7 @@ struct MainView: View {
         } else {
             threshold = pinnedStackMinItems
         }
-        return pinnedItems.count >= threshold
+        return pinnedCount >= threshold
     }
 
     private func isTriggerKeyHeld() -> Bool {
@@ -790,6 +790,7 @@ struct MainView: View {
                 }
             }
         )
+        .equatable()
         .id(item.id)
         .contentShape(Rectangle())
         .onHover { isHovered in
@@ -892,20 +893,25 @@ struct MainView: View {
     }
 
     private var clipboardList: some View {
-        ScrollViewReader { proxy in
+        let currentItems = filteredItems
+        let pinned = currentItems.filter { $0.isPinned }
+        let unpinned = currentItems.filter { !$0.isPinned }
+        let isStacking = shouldStackPinned(for: pinned.count)
+
+        return ScrollViewReader { proxy in
             List {
-                if shouldStackPinned, !pinnedItems.isEmpty {
-                    pinnedStackView(pinned: pinnedItems)
+                if isStacking, !pinned.isEmpty {
+                    pinnedStackView(pinned: pinned)
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
 
-                    ForEach(Array(unpinnedItems.enumerated()), id: \.element.id) { _, item in
+                    ForEach(unpinned) { item in
                         itemRow(item)
                     }
                 } else {
-                    ForEach(Array(filteredItems.enumerated()), id: \.element.id) { index, item in
-                        if index > 0 && !item.isPinned && filteredItems[index - 1].isPinned {
+                    ForEach(Array(currentItems.enumerated()), id: \.element.id) { index, item in
+                        if index > 0 && !item.isPinned && currentItems[index - 1].isPinned {
                             Divider()
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 2)
@@ -913,7 +919,7 @@ struct MainView: View {
                         itemRow(item)
                     }
                     .onMove { source, destination in
-                        let isReorderingPinnedOnly = source.allSatisfy { filteredItems[$0].isPinned }
+                        let isReorderingPinnedOnly = source.allSatisfy { currentItems[$0].isPinned }
                         if isReorderingPinnedOnly { storage.movePinned(source: source, destination: destination) }
                     }
                 }
@@ -923,8 +929,12 @@ struct MainView: View {
             .scrollIndicators(.hidden)
             .padding(.horizontal, 0)
             .padding(.vertical, 8)
-            .onChange(of: filteredItems.first?.id) { _, topID in
-                if let id = topID { proxy.scrollTo(id, anchor: .top) }
+            .onChange(of: currentItems.first?.id) { _, topID in
+                if let id = topID {
+                    DispatchQueue.main.async {
+                        proxy.scrollTo(id, anchor: .top)
+                    }
+                }
             }
         }
     }

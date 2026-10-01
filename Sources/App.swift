@@ -245,6 +245,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         checkAndShowWhatsNew(currentVersion: currentVersion)
+
+        DispatchQueue.main.async {
+            for window in NSApp.windows {
+                if window.title == "Settings" || window.title.isEmpty {
+                    window.orderOut(nil)
+                    window.close()
+                }
+            }
+        }
     }
     
     private func setupNotificationDelegate() {
