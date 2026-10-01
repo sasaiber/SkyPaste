@@ -46,6 +46,7 @@ class ClipboardMonitor: ObservableObject {
     private var activeProviders: [ImagePasteboardProvider] = []
     private var processingTask: Task<Void, Never>?
     private var processingGeneration: UInt64 = 0
+    private var remoteRetries = 0
     
     // Adaptive polling
     private var currentInterval: TimeInterval = 0.5
@@ -208,6 +209,27 @@ class ClipboardMonitor: ObservableObject {
             if !syncEnabled {
                 return
             }
+            
+            // Universal Clipboard publishes its marker types immediately but pulls the
+            // actual content from the other device lazily. Reading too early returns nil
+            // and the item would be dropped for good, so retry until content is readable.
+            let contentReady = pasteboard.string(forType: .string) != nil
+                || pbTypes.contains(.png) || pbTypes.contains(.tiff)
+                || pbTypes.contains(.fileURL) || pbTypes.contains(.URL)
+            if !contentReady {
+                if remoteRetries < 10 {
+                    remoteRetries += 1
+                    let token = processingGeneration
+                    Task { @MainActor [weak self] in
+                        try? await Task.sleep(for: .seconds(0.4))
+                        guard let self, self.processingGeneration == token else { return }
+                        self.processNewItem()
+                    }
+                }
+                return
+            }
+            remoteRetries = 0
+            
             if let remoteSourceID = pasteboard.string(forType: NSPasteboard.PasteboardType("org.nspasteboard.source")) {
                 sourceBundleID = remoteSourceID
                 let shortName = remoteSourceID.components(separatedBy: ".").last?.capitalized ?? "App"
@@ -217,6 +239,7 @@ class ClipboardMonitor: ObservableObject {
                 remoteDeviceName = "Handoff Device"
             }
         } else {
+            remoteRetries = 0
             sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown"
             sourceBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         }

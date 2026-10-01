@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
 struct StorageTabView: View {
     @ObservedObject var storage: Storage
@@ -8,6 +10,8 @@ struct StorageTabView: View {
     @AppStorage("neverDelete") private var neverDelete: Bool = false
     
     @State private var showFactoryResetConfirmation = false
+    @State private var backupMessage: String? = nil
+    @State private var showBackupResult = false
     
     var body: some View {
         VStack(spacing: 16) {
@@ -58,6 +62,23 @@ struct StorageTabView: View {
                 }
             }
             
+            Section("Backup") {
+                VStack(spacing: 8) {
+                    Button(action: exportBackup) {
+                        Text("Export Backup…")
+                            .frame(maxWidth: .infinity, alignment: .center)
+                    }
+                    Button(action: importBackup) {
+                        Text("Import Backup…")
+                            .frame(maxWidth: .infinity, alignment: .center)
+                    }
+                    Text("Saves history, folders, pinned items, folder shortcuts and cached images into a single file. Import merges it into the current data without duplicates.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            
             Section("Advanced") {
                 Button(role: .destructive, action: {
                     showFactoryResetConfirmation = true
@@ -75,5 +96,40 @@ struct StorageTabView: View {
         } message: {
             Text("This will delete all clipboard history, folders, custom shortcuts, and settings. The app will be returned to its initial state. This action cannot be undone.")
         }
+        .alert("Backup", isPresented: $showBackupResult) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(backupMessage ?? "")
+        }
+    }
+    
+    private func exportBackup() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "SkyPaste-Backup.json"
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try storage.exportBackup(to: url)
+            backupMessage = "Backup exported to \(url.lastPathComponent)."
+        } catch {
+            backupMessage = "Export failed: \(error.localizedDescription)"
+        }
+        showBackupResult = true
+    }
+    
+    private func importBackup() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let result = try storage.importBackup(from: url)
+            backupMessage = "Imported \(result.items) items and \(result.folders) folders."
+        } catch {
+            backupMessage = "Import failed: \(error.localizedDescription)"
+        }
+        showBackupResult = true
     }
 }

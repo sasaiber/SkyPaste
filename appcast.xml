@@ -4,6 +4,28 @@
         <title>SkyPaste Updates</title>
         
         <item>
+            <title>Version 1.0.8</title>
+            <pubDate>Thu, 01 Oct 2026 12:00:00 +0000</pubDate>
+            <description><![CDATA[
+<ul>
+<li>Native Liquid Glass UI on macOS 26 and macOS 27 (with fallback on older systems).</li>
+<li>Sparkle updated to 2.10.0.</li>
+<li>Fixed a stray empty "Settings" window appearing on launch.</li>
+<li>Fixed sharp square corners around the glass panels.</li>
+<li>Pinned items are now clearly highlighted and adapt to light/dark appearance.</li>
+<li>Improved Universal Clipboard reliability.</li>
+<li>New Backup: export and import history, folders and pinned items from Settings &gt; Storage.</li>
+</ul>
+            ]]></description>
+            <enclosure url="https://github.com/sasaiber/SkyPaste/releases/download/1.0.8/SkyPaste.zip"
+                       sparkle:version="1.0.8"
+                       sparkle:shortVersionString="1.0.8"
+                       sparkle:edSignature="g0hR8ghq4MF/qkC34SEn7zlxTOboxbO+ituA3KE/X/xzFLQUAW7f4InE3UN64BwGxYwqYnJU7TIDrILbDVT7DA=="
+                       length="3778854"
+                       type="application/octet-stream" />
+        </item>
+
+        <item>
             <title>Version 1.0.7</title>
             <pubDate>Thu, 11 Jun 2026 12:00:00 +0000</pubDate>
             <description><![CDATA[

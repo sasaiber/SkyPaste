@@ -44,10 +44,12 @@ struct PreferencesView: View {
                         }
                     }
                     .formStyle(.grouped)
+                    .scrollContentBackground(.hidden)
                 }
             }
         }
         .frame(width: 500, height: 450)
+        .windowGlassBackground()
     }
 }
 

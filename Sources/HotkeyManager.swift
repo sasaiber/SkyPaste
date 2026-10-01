@@ -115,7 +115,13 @@ class FloatingPanel: NSPanel, NSWindowDelegate {
         hidesOnDeactivate = false
         isOpaque = false
         backgroundColor = .clear
-        hasShadow = true
+        if #available(macOS 26.0, *) {
+            // Native glass renders its own rounded shadow. The window-level shadow is
+            // a square of the panel frame and shows up as hard dark corners.
+            hasShadow = false
+        } else {
+            hasShadow = true
+        }
         titlebarSeparatorStyle = .none
         
         standardWindowButton(.closeButton)?.isHidden = true
@@ -123,6 +129,16 @@ class FloatingPanel: NSPanel, NSWindowDelegate {
         standardWindowButton(.zoomButton)?.isHidden = true
         
         self.contentView = contentView
+        
+        if #available(macOS 26.0, *) {
+            // Clip the whole panel to the glass radius. The glass layer's own square
+            // backing otherwise peeks out from behind the rounded corners as hard
+            // dark tabs at the panel edges.
+            contentView.wantsLayer = true
+            contentView.layer?.backgroundColor = CGColor.clear
+            contentView.layer?.cornerRadius = 16
+            contentView.layer?.masksToBounds = true
+        }
         
         // Position
         let origin = computeOrigin(size: contentRect.size, position: position, button: statusBarButton)

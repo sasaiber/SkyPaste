@@ -6,6 +6,20 @@ if [ -d "/opt/homebrew/opt/swift" ]; then
     export PATH="/opt/homebrew/opt/swift/bin:$PATH"
 fi
 
+# SDK 27 declares SwiftUI's property wrappers (@State, @Binding, ...) as external
+# macros served by the SwiftUIMacros plugin. That plugin ships only with full Xcode,
+# so a Command Line Tools toolchain cannot compile against SDK 27+. Fall back to the
+# newest SDK 26, which still exposes every macOS 26 Liquid Glass API.
+SWIFTC_PATH="$(xcrun -f swiftc 2>/dev/null || true)"
+if [ -n "${SWIFTC_PATH}" ] && [ ! -e "$(dirname "${SWIFTC_PATH}")/../lib/swift/host/plugins/libSwiftUIMacros.dylib" ]; then
+    SDK_DIR="$(dirname "$(xcrun --show-sdk-path)")"
+    FALLBACK_SDK="$(ls -d "${SDK_DIR}"/MacOSX26*.sdk 2>/dev/null | sort -V | tail -1)"
+    if [ -n "${FALLBACK_SDK}" ]; then
+        export SDKROOT="${FALLBACK_SDK}"
+        echo "Using SDK: ${SDKROOT} (SwiftUIMacros plugin is unavailable, SDK 27+ cannot compile @State)"
+    fi
+fi
+
 APP_NAME="SkyPaste"
 BUILD_DIR="build"
 APP_DIR="${BUILD_DIR}/${APP_NAME}.app"
@@ -13,6 +27,11 @@ CONTENTS_DIR="${APP_DIR}/Contents"
 MACOS_DIR="${CONTENTS_DIR}/MacOS"
 RESOURCES_DIR="${CONTENTS_DIR}/Resources"
 FRAMEWORKS_DIR="${CONTENTS_DIR}/Frameworks"
+
+# Start from a clean bundle. Reusing an existing .app directory leaves stale files
+# behind, and Finder/file-provider xattrs on it make codesign fail with
+# "resource fork, Finder information, or similar detritus not allowed".
+rm -rf "${APP_DIR}"
 
 mkdir -p "${MACOS_DIR}" "${RESOURCES_DIR}" "${FRAMEWORKS_DIR}"
 
@@ -42,9 +61,9 @@ cat << 'EOF' > "${CONTENTS_DIR}/Info.plist"
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.7</string>
+    <string>1.0.8</string>
     <key>CFBundleVersion</key>
-    <string>1.0.7</string>
+    <string>1.0.8</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>LSUIElement</key>
@@ -56,7 +75,7 @@ cat << 'EOF' > "${CONTENTS_DIR}/Info.plist"
     <key>SUFeedURL</key>
     <string>https://raw.githubusercontent.com/sasaiber/SkyPaste/main/appcast.xml</string>
     <key>SUPublicEDKey</key>
-    <string>t0kuZBdUtqMmLA6aIIjjJaJ9RYpMiA3VLqRFnYP1C04=</string>
+    <string>4iZR1Q6JnCpQS1P5JH+LO4tXXYuhnc/Drr47CVNfbs8=</string>
 </dict>
 </plist>
 EOF
@@ -70,9 +89,15 @@ cp .build/release/SkyPaste "${MACOS_DIR}/${APP_NAME}"
 # Add Frameworks rpath
 install_name_tool -add_rpath @executable_path/../Frameworks "${MACOS_DIR}/${APP_NAME}"
 
-# Copy Sparkle.framework
-if [ -d ".build/arm64-apple-macosx/release/Sparkle.framework" ]; then
-    cp -R ".build/arm64-apple-macosx/release/Sparkle.framework" "${FRAMEWORKS_DIR}/"
+# Copy Sparkle.framework. SwiftPM's output layout varies by toolchain version
+# (.build/<triple>/release vs .build/out/Products/Release), so locate it rather than
+# hardcode a path — the binary links @rpath/Sparkle.framework and dies at launch without it.
+SPARKLE_FW="$(find .build -maxdepth 5 -type d -name Sparkle.framework 2>/dev/null | head -1)"
+if [ -n "${SPARKLE_FW}" ]; then
+    cp -R "${SPARKLE_FW}" "${FRAMEWORKS_DIR}/"
+else
+    echo "ERROR: Sparkle.framework not found under .build — refusing to produce a broken bundle." >&2
+    exit 1
 fi
 
 # Check if local code signing certificate exists and is valid

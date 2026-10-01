@@ -627,4 +627,134 @@ class Storage: ObservableObject {
             }
         }
     }
+    
+    // MARK: - Backup (export / import)
+    
+    private var imagesDirectory: URL? {
+        documentDirectory?.appendingPathComponent("Images", isDirectory: true)
+    }
+    
+    private func mediaURLs(for item: ClipboardItem) -> [URL] {
+        if (item.type == .image || item.type == .file), let content = item.textContent {
+            return content.components(separatedBy: "\n").filter { !$0.isEmpty }.compactMap { URL(string: $0) }
+        }
+        if let url = item.fileURL {
+            return [url]
+        }
+        return []
+    }
+    
+    private func decodeShortcuts(_ key: String) -> [HotkeyManager.FolderShortcut] {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let decoded = try? JSONDecoder().decode([HotkeyManager.FolderShortcut].self, from: data) else { return [] }
+        return decoded
+    }
+    
+    func exportBackup(to url: URL) throws {
+        var entries: [BackupDocument.ItemEntry] = []
+        for item in items {
+            var blobs: [String: String] = [:]
+            for mediaURL in mediaURLs(for: item) where mediaURL.path.contains("SkyPaste/Images") {
+                guard let data = try? Data(contentsOf: mediaURL), data.count <= BackupDocument.maxBlobBytes else { continue }
+                blobs[mediaURL.lastPathComponent] = data.base64EncodedString()
+            }
+            entries.append(BackupDocument.ItemEntry(item: item, blobs: blobs))
+        }
+        
+        let doc = BackupDocument(
+            folders: folders,
+            folderShortcuts: decodeShortcuts("folderShortcuts"),
+            folderMoveShortcuts: decodeShortcuts("folderMoveShortcuts"),
+            items: entries
+        )
+        let data = try JSONEncoder().encode(doc)
+        try data.write(to: url, options: .atomic)
+    }
+    
+    @discardableResult
+    func importBackup(from url: URL) throws -> (items: Int, folders: Int) {
+        let data = try Data(contentsOf: url)
+        let doc = try JSONDecoder().decode(BackupDocument.self, from: data)
+        guard doc.format == BackupDocument.formatID else {
+            throw NSError(domain: "SkyPasteBackup", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "This file is not a SkyPaste backup."])
+        }
+        
+        invalidateFolderCountCache()
+        
+        var addedFolders = 0
+        for folder in doc.folders where !folders.contains(where: { $0.id == folder.id }) {
+            folders.append(folder)
+            addedFolders += 1
+        }
+        folders.sort { $0.order < $1.order }
+        for i in folders.indices { folders[i].order = i }
+        
+        mergeShortcuts(doc.folderShortcuts, key: "folderShortcuts")
+        mergeShortcuts(doc.folderMoveShortcuts, key: "folderMoveShortcuts")
+        
+        var addedItems = 0
+        for entry in doc.items where !items.contains(where: { $0.id == entry.item.id }) {
+            var item = entry.item
+            if !entry.blobs.isEmpty {
+                item = restoreBlobs(for: item, blobs: entry.blobs)
+            }
+            if item.type == .image || item.type == .file {
+                item.thumbPath = nil
+                item.thumbStatus = ThumbStatus.pending.rawValue
+            }
+            items.append(item)
+            addedItems += 1
+        }
+        
+        saveItems()
+        saveFolders()
+        if addedFolders > 0 {
+            DispatchQueue.main.async { HotkeyManager.shared.start() }
+        }
+        return (addedItems, addedFolders)
+    }
+    
+    private func mergeShortcuts(_ incoming: [HotkeyManager.FolderShortcut], key: String) {
+        guard !incoming.isEmpty else { return }
+        var array = decodeShortcuts(key)
+        for sc in incoming {
+            array.removeAll {
+                $0.folderID == sc.folderID
+                    || ($0.keyText.lowercased() == sc.keyText.lowercased() && $0.modifiers == sc.modifiers)
+            }
+            array.append(sc)
+        }
+        if let data = try? JSONEncoder().encode(array) {
+            UserDefaults.standard.set(data, forKey: key)
+        }
+    }
+    
+    private func restoreBlobs(for item: ClipboardItem, blobs: [String: String]) -> ClipboardItem {
+        guard let dir = imagesDirectory else { return item }
+        try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
+        
+        var item = item
+        let oldURLs = (item.textContent ?? "")
+            .components(separatedBy: "\n")
+            .filter { !$0.isEmpty }
+            .compactMap { URL(string: $0) }
+        
+        var newURLs: [URL] = []
+        for oldURL in oldURLs {
+            let name = oldURL.lastPathComponent
+            if let base64 = blobs[name],
+               let blob = Data(base64Encoded: base64) {
+                let newURL = dir.appendingPathComponent(UUID().uuidString + "." + (name as NSString).pathExtension)
+                if (try? blob.write(to: newURL, options: .atomic)) != nil {
+                    if item.fileURL?.lastPathComponent == name { item.fileURL = newURL }
+                    newURLs.append(newURL)
+                    continue
+                }
+            }
+            newURLs.append(oldURL)
+        }
+        item.textContent = newURLs.map { $0.absoluteString }.joined(separator: "\n")
+        return item
+    }
 }

@@ -48,7 +48,7 @@ struct WelcomeView: View {
             }
         }
         .frame(width: 500, height: 720)
-        .background(VisualEffectView(material: .hudWindow, blendingMode: .behindWindow).ignoresSafeArea())
+        .windowGlassBackground()
         .onAppear {
             if #available(macOS 13.0, *) {
                 launchAtLogin = SMAppService.mainApp.status == .enabled

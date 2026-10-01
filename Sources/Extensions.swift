@@ -18,29 +18,31 @@ extension SMAppService {
     }
 }
 
-// MARK: - Glass-like background with blur material
+// MARK: - Glass backgrounds
 extension View {
     @ViewBuilder
     func glassBackground(cornerRadius: CGFloat = 16, style: RoundedCornerStyle = .continuous) -> some View {
-        self
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: style))
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: style)
-                    .stroke(.white.opacity(0.12), lineWidth: 0.5)
-            )
+        if #available(macOS 26.0, *) {
+            self.glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius, style: style))
+        } else {
+            self
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: style))
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: style)
+                        .stroke(.white.opacity(0.12), lineWidth: 0.5)
+                )
+        }
     }
     
+    /// Full-bleed background for window content: real Liquid Glass on macOS 26+,
+    /// the HUD blur it replaces on macOS 14–15.
     @ViewBuilder
-    func glassListItem(isHovered: Bool, isPinned: Bool = false) -> some View {
-        self
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isHovered ? Color.primary.opacity(0.08) : (isPinned ? Color.accentColor.opacity(0.06) : Color.clear))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isHovered ? .white.opacity(0.1) : .clear, lineWidth: 0.5)
-            )
+    func windowGlassBackground() -> some View {
+        if #available(macOS 26.0, *) {
+            self.background(GlassEffectBackground().ignoresSafeArea())
+        } else {
+            self.background(VisualEffectView(material: .hudWindow, blendingMode: .behindWindow).ignoresSafeArea())
+        }
     }
 }
 
@@ -66,6 +68,15 @@ struct VisualEffectView: NSViewRepresentable {
         nsView.material = material
         nsView.blendingMode = blendingMode
     }
+}
+
+// MARK: - Native Liquid Glass (macOS 26+)
+@available(macOS 26.0, *)
+struct GlassEffectBackground: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSGlassEffectView {
+        NSGlassEffectView()
+    }
+    func updateNSView(_ nsView: NSGlassEffectView, context: Context) { }
 }
 
 // MARK: - Time formatting

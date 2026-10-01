@@ -7,16 +7,44 @@ import ApplicationServices
 import Sparkle
 
 @main
-struct SkyPasteApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-
-    var body: some Scene {
-        Settings { Text("Settings") }
-            .commands {
-                CommandGroup(replacing: .saveItem) { }
-                CommandGroup(replacing: .newItem) { }
-                CommandGroup(replacing: .undoRedo) { }
-            }
+final class SkyPasteEntrypoint {
+    @MainActor
+    static func main() {
+        let app = NSApplication.shared
+        let delegate = AppDelegate()
+        app.delegate = delegate
+        installMainMenu()
+        app.run()
+    }
+    
+    // Pure AppKit entry point: a SwiftUI `Settings` scene kept surfacing an empty
+    // "Settings" window on launch, so the app menu is built by hand instead.
+    @MainActor
+    private static func installMainMenu() {
+        let mainMenu = NSMenu()
+        
+        let appMenu = NSMenu()
+        appMenu.addItem(NSMenuItem(title: "About SkyPaste", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: ""))
+        appMenu.addItem(NSMenuItem(title: "Settings…", action: #selector(AppDelegate.openSettings), keyEquivalent: ","))
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(NSMenuItem(title: "Quit SkyPaste", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        let appMenuItem = NSMenuItem()
+        appMenuItem.submenu = appMenu
+        mainMenu.addItem(appMenuItem)
+        
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(NSMenuItem(title: "Undo", action: Selector(("undo:")), keyEquivalent: "z"))
+        editMenu.addItem(NSMenuItem(title: "Redo", action: Selector(("redo:")), keyEquivalent: "Z"))
+        editMenu.addItem(NSMenuItem.separator())
+        editMenu.addItem(NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
+        editMenu.addItem(NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        editMenu.addItem(NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        editMenu.addItem(NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        let editMenuItem = NSMenuItem()
+        editMenuItem.submenu = editMenu
+        mainMenu.addItem(editMenuItem)
+        
+        NSApp.mainMenu = mainMenu
     }
 }
 
@@ -47,6 +75,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         AppDelegate.shared = self
         NSApp.setActivationPolicy(.accessory)
         self.globalStore = Storage()
+        
+        // Accessory app: never restore windows from a previous session, otherwise a
+        // leftover SwiftUI Settings-scene window resurfaces as a stray empty box.
+        UserDefaults.standard.register(defaults: ["NSQuitAlwaysKeepsWindows": false])
+        if let bundleID = Bundle.main.bundleIdentifier {
+            let savedState = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first?
+                .appendingPathComponent("Saved Application State/\(bundleID).savedState")
+            if let savedState {
+                try? FileManager.default.removeItem(at: savedState)
+            }
+        }
         
         UserDefaults.standard.register(defaults: [
             "SUEnableAutomaticChecks": true,
@@ -477,23 +516,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         window.titlebarAppearsTransparent = true
         window.isOpaque = false
         window.backgroundColor = .clear
-        
-        let visualEffect = NSVisualEffectView()
-        visualEffect.blendingMode = .behindWindow
-        visualEffect.material = .hudWindow
-        visualEffect.state = .active
-        
-        let host = NSHostingController(rootView: preferencesView)
-        host.view.translatesAutoresizingMaskIntoConstraints = false
-        visualEffect.addSubview(host.view)
-        NSLayoutConstraint.activate([
-            host.view.topAnchor.constraint(equalTo: visualEffect.topAnchor),
-            host.view.bottomAnchor.constraint(equalTo: visualEffect.bottomAnchor),
-            host.view.leadingAnchor.constraint(equalTo: visualEffect.leadingAnchor),
-            host.view.trailingAnchor.constraint(equalTo: visualEffect.trailingAnchor)
-        ])
-        
-        window.contentView = visualEffect
+        window.contentViewController = NSHostingController(rootView: preferencesView)
         window.contentMinSize = NSSize(width: 500, height: 450)
         window.isReleasedWhenClosed = false
         window.makeKeyAndOrderFront(nil)
@@ -529,6 +552,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                               styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
         window.center()
         window.titlebarAppearsTransparent = true
+        window.isOpaque = false
+        window.backgroundColor = .clear
         window.title = ""
         window.contentViewController = NSHostingController(rootView: welcomeView)
         window.isReleasedWhenClosed = false

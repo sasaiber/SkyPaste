@@ -42,6 +42,11 @@ struct ClipboardItemRow: View {
     @AppStorage("unlimitedMediaPreviews") private var unlimitedMediaPreviews: Bool = true
     @AppStorage("maxPreviewsLimit") private var maxPreviewsLimit: Int = 10
     
+    @Environment(\.colorScheme) private var colorScheme
+    
+    private var pinnedFill: Color { Color.accentColor.opacity(colorScheme == .dark ? 0.22 : 0.14) }
+    private var pinnedStroke: Color { Color.accentColor.opacity(colorScheme == .dark ? 0.55 : 0.45) }
+    
 
     
     private func formatShortcut(key: String, modifiers: Int) -> String {
@@ -106,6 +111,11 @@ struct ClipboardItemRow: View {
             
             // 3. Trailing: persistent pin + hover actions + time
             HStack(spacing: 6) {
+                if item.isPinned {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.accentColor)
+                }
                 if isHovered {
                     if folders.isEmpty {
                         Button(action: { onCreateFolder?(nil) }) {
@@ -166,10 +176,10 @@ struct ClipboardItemRow: View {
         .contentShape(Rectangle())
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(isHovered ? Color.primary.opacity(0.08) : (item.isPinned ? Color.accentColor.opacity(0.08) : Color.clear))
+                .fill(isHovered ? Color.primary.opacity(0.08) : (item.isPinned ? pinnedFill : Color.clear))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(item.isPinned ? Color.accentColor.opacity(0.15) : .clear, lineWidth: 0.5)
+                        .stroke(item.isPinned ? pinnedStroke : .clear, lineWidth: 1)
                 )
         )
         // Edge Popover for metadata & full text
