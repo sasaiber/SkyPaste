@@ -90,7 +90,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         UserDefaults.standard.register(defaults: [
             "SUEnableAutomaticChecks": true,
             "SUScheduledCheckInterval": 259200,
-            "SUAutomaticallyUpdate": false
+            "SUAutomaticallyUpdate": true
         ])
         // Migrate installs that still carry the old 1-day default; there is no UI for
         // the interval, so nobody could have set 86400 on purpose.
@@ -210,7 +210,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         UserDefaults.standard.register(defaults: [
             "enableNotifications": true,
-            "bounceIconOnCopy": false,
+            "bounceIconOnCopy": true,
             "hasRequestedAccessibility": false,
             "hk1Key": "s",
             "hk1Modifiers": Int(NSEvent.ModifierFlags.command.rawValue),

@@ -172,7 +172,7 @@ struct GeneralTabView: View {
 
 struct NotificationsTabView: View {
     @AppStorage("enableNotifications") private var enableNotifications: Bool = true
-    @AppStorage("bounceIconOnCopy") private var bounceIconOnCopy: Bool = false
+    @AppStorage("bounceIconOnCopy") private var bounceIconOnCopy: Bool = true
     
     var body: some View {
         Section("Copy Feedback") {

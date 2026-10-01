@@ -23,7 +23,7 @@ enum UpdateFrequency: Int, CaseIterable, Identifiable {
 struct AboutTabView: View {
     @AppStorage("SUEnableAutomaticChecks") private var enableAutomaticChecks: Bool = true
     @AppStorage("SUScheduledCheckInterval") private var scheduledCheckInterval: Int = 86400
-    @AppStorage("SUAutomaticallyUpdate") private var automaticallyUpdate: Bool = false
+    @AppStorage("SUAutomaticallyUpdate") private var automaticallyUpdate: Bool = true
     
     private var frequency: Binding<UpdateFrequency> {
         Binding(

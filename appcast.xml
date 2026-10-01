@@ -22,8 +22,8 @@ The update signing key had to be replaced, so versions 1.0.8 and older cannot ve
             <enclosure url="https://github.com/sasaiber/SkyPaste/releases/download/1.0.9/SkyPaste.zip"
                        sparkle:version="1.0.9"
                        sparkle:shortVersionString="1.0.9"
-                       sparkle:edSignature="r2eEalxHx2gl0sPqcIylbkRZCONu7dLCt5MA/2MoEsL4lOGNQ8BoSZKg3HbKAvD2GoEPZJGewegsNPRIEe9gDQ=="
-                       length="3781445"
+                       sparkle:edSignature="rvqtepJ2u2T+z6EsVMPAZ6bUd6DlT1H8UW6ntlPe6HHLQtYL/6q1mpDv0WwQ9z4h0Cp7lPJg8EclV0h5Q4FJBQ=="
+                       length="3781452"
                        type="application/octet-stream" />
         </item>
 
