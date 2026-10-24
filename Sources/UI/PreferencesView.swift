@@ -8,21 +8,50 @@ struct PreferencesView: View {
     
     @State private var selectedTab = 0
     
+    private let tabs: [(id: Int, title: String, icon: String)] = [
+        (0, "General", "gearshape"),
+        (1, "Notifications", "bell"),
+        (2, "Shortcuts", "command"),
+        (3, "Storage", "internaldrive"),
+        (4, "Folders", "folder"),
+        (6, "Ignore Apps", "nosign"),
+        (5, "About", "info.circle")
+    ]
+    
     var body: some View {
         VStack(spacing: 0) {
-            Picker("", selection: $selectedTab) {
-                Text("General").tag(0)
-                Text("Notifications").tag(1)
-                Text("Shortcuts").tag(2)
-                Text("Storage").tag(3)
-                Text("Folders").tag(4)
-                Text("Ignore Apps").tag(6)
-                Text("About").tag(5)
+            // Horizontal scrollable / flexible tab bar so tabs never get clipped
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(tabs, id: \.id) { tab in
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                selectedTab = tab.id
+                            }
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: tab.icon)
+                                    .font(.system(size: 11, weight: .medium))
+                                Text(tab.title)
+                                    .font(.system(size: 12, weight: selectedTab == tab.id ? .semibold : .regular))
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(selectedTab == tab.id ? Color.accentColor.opacity(0.18) : Color.clear)
+                            )
+                            .foregroundColor(selectedTab == tab.id ? .accentColor : .primary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 4)
+            .background(Color.secondary.opacity(0.05))
+            
+            Divider()
             
             ScrollView(.vertical, showsIndicators: true) {
                 if selectedTab == 4 {
@@ -49,7 +78,7 @@ struct PreferencesView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(minWidth: 540, maxWidth: .infinity, minHeight: 520, maxHeight: .infinity)
+        .frame(minWidth: 620, maxWidth: .infinity, minHeight: 520, maxHeight: .infinity)
         .windowGlassBackground()
     }
 }
