@@ -24,7 +24,7 @@ struct PreferencesView: View {
             .padding(.top, 12)
             .padding(.bottom, 4)
             
-            ScrollView {
+            ScrollView(.vertical, showsIndicators: true) {
                 if selectedTab == 4 {
                     FoldersTabWrapper(storage: storage)
                         .padding(16)
@@ -47,8 +47,9 @@ struct PreferencesView: View {
                     .scrollContentBackground(.hidden)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 500, height: 450)
+        .frame(minWidth: 540, maxWidth: .infinity, minHeight: 520, maxHeight: .infinity)
         .windowGlassBackground()
     }
 }
