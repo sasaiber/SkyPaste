@@ -1,6 +1,26 @@
-# SkyPaste 📋
+<p align="center">
+  <img src="screen/logo.png" alt="SkyPaste Logo" width="128" height="128" />
+</p>
 
-SkyPaste is a lightweight, efficient clipboard manager for macOS, designed with a focus on speed and simplicity. I created this for myself because I wanted something that just works without the bloat.
+<h1 align="center">SkyPaste</h1>
+
+<p align="center">
+  <strong>A lightweight, blazing-fast, and native macOS clipboard manager.</strong><br>
+  Built with Swift, SwiftUI, and Liquid Glass. Private by design — zero cloud, zero telemetry.
+</p>
+
+<p align="center">
+  <a href="https://github.com/sasaiber/SkyPaste/releases/latest">
+    <img src="https://img.shields.io/github/v/release/sasaiber/SkyPaste?style=flat-square&color=blue" alt="Latest Release" />
+  </a>
+  <img src="https://img.shields.io/badge/macOS-14.0%2B-black?style=flat-square&logo=apple" alt="macOS 14.0+" />
+  <img src="https://img.shields.io/badge/Swift-6.0-orange?style=flat-square&logo=swift" alt="Swift" />
+  <a href="PRIVACY_POLICY.md">
+    <img src="https://img.shields.io/badge/Privacy-100%25%20Local-success?style=flat-square" alt="Privacy First" />
+  </a>
+</p>
+
+---
 
 ![Main View](screen/main.png)
 
