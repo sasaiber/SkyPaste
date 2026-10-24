@@ -84,15 +84,13 @@ final class ThumbnailGenerator: @unchecked Sendable {
     func getExistingThumbnailURL(for url: URL) -> URL? {
         let thumbURL = thumbnailURL(for: url)
 
-        if existingThumbsCache.object(forKey: thumbURL as NSURL)?.boolValue == true {
-            return thumbURL
+        if let cached = existingThumbsCache.object(forKey: thumbURL as NSURL) {
+            return cached.boolValue ? thumbURL : nil
         }
 
-        if FileManager.default.fileExists(atPath: thumbURL.path) {
-            existingThumbsCache.setObject(true as NSNumber, forKey: thumbURL as NSURL)
-            return thumbURL
-        }
-        return nil
+        let exists = FileManager.default.fileExists(atPath: thumbURL.path)
+        existingThumbsCache.setObject(NSNumber(value: exists), forKey: thumbURL as NSURL)
+        return exists ? thumbURL : nil
     }
 
     private func thumbnailURL(for url: URL) -> URL {

@@ -403,6 +403,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 return event
             }
             
+            // Native confirmation alerts run modally above the panel
+            if NSApp.modalWindow != nil {
+                return event
+            }
+            
             if !WindowManager.shared.contains(clickPoint) {
                 WindowManager.shared.close()
                 self.removeOutsideClickMonitor()

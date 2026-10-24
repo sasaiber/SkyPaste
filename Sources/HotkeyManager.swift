@@ -50,7 +50,10 @@ class WindowManager {
     }
     
     func contains(_ point: NSPoint) -> Bool {
-        return panel?.frame.contains(point) ?? false
+        guard let panel else { return false }
+        // Child windows (hover preview) count as part of the panel.
+        return panel.frame.contains(point)
+            || (panel.childWindows ?? []).contains { $0.isVisible && $0.frame.contains(point) }
     }
 }
 

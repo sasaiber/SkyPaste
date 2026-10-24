@@ -8,7 +8,6 @@ struct ClipboardItemRow: View, Equatable {
         lhs.item.isPinned == rhs.item.isPinned &&
         lhs.item.copyCount == rhs.item.copyCount &&
         lhs.item.folderID == rhs.item.folderID &&
-        lhs.hoveredItemID == rhs.hoveredItemID &&
         lhs.selectedFolderID == rhs.selectedFolderID &&
         lhs.folders.count == rhs.folders.count
     }
@@ -16,9 +15,7 @@ struct ClipboardItemRow: View, Equatable {
     var storage: Storage
     let item: ClipboardItem
     let folders: [AppFolder]
-    let hoveredItemID: UUID?
     var selectedFolderID: UUID? = nil   // current view context
-    var isHovered: Bool { hoveredItemID == item.id }
     
     var onPin: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
@@ -28,6 +25,7 @@ struct ClipboardItemRow: View, Equatable {
     var onCreateFolder: (([URL]?) -> Void)? = nil
     var onDeleteFiles: (([URL]) -> Void)? = nil
     
+    @State private var isHovered: Bool = false
     @State private var showFullText: Bool = false
     @State private var isPopoverHovered: Bool = false
     @State private var hideTask: DispatchWorkItem? = nil
@@ -109,7 +107,7 @@ struct ClipboardItemRow: View, Equatable {
                         renderThumbnails(urls: urls, count: item.fileCount ?? urls.count)
                     }
                 } else {
-                    let text = item.textContent ?? "Empty"
+                    let text = String((item.textContent ?? "Empty").prefix(300))
                     let displayText = showSpecialSymbols ? replaceSpecialSymbols(text) : text
                     Text(displayText)
                         .font(.system(size: 11, weight: .regular, design: .rounded))
@@ -185,6 +183,37 @@ struct ClipboardItemRow: View, Equatable {
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
         .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovered = hovering
+            hideTask?.cancel()
+            if hovering {
+                storage.hoveredItemID = item.id
+                let delaySeconds = max(0, previewDelay / 1000.0)
+                if delaySeconds < 0.01 {
+                    showFullText = true
+                } else {
+                    let task = DispatchWorkItem {
+                        if self.isHovered && self.storage.hoveredItemID == self.item.id {
+                            self.showFullText = true
+                        }
+                    }
+                    hideTask = task
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delaySeconds, execute: task)
+                }
+            } else {
+                if storage.hoveredItemID == item.id && !isPopoverHovered {
+                    storage.hoveredItemID = nil
+                }
+                let task = DispatchWorkItem {
+                    if !self.isHovered && (!self.isPopoverHovered || self.storage.hoveredItemID != self.item.id) && !self.isSystemMenuOpen {
+                        self.showFullText = false
+                        self.isPopoverHovered = false
+                    }
+                }
+                hideTask = task
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: task)
+            }
+        }
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(isHovered ? Color.primary.opacity(0.08) : (item.isPinned ? pinnedFill : Color.clear))
@@ -201,6 +230,9 @@ struct ClipboardItemRow: View, Equatable {
                     if popoverHovered {
                         storage.hoveredItemID = item.id
                     } else if !self.isHovered && !isSystemMenuOpen {
+                        if storage.hoveredItemID == item.id {
+                            storage.hoveredItemID = nil
+                        }
                         self.showFullText = false
                     }
                 }
@@ -219,39 +251,6 @@ struct ClipboardItemRow: View, Equatable {
                 storage.popoverHoveredURL = nil
             }
         }
-        .onChange(of: hoveredItemID) { _, newHoveredID in
-            hideTask?.cancel()
-            let shouldShowPopover = true
-            
-            if newHoveredID == item.id {
-                if shouldShowPopover {
-                    let delaySeconds = max(0, previewDelay / 1000.0)
-                    if delaySeconds < 0.01 {
-                        self.showFullText = true
-                    } else {
-                        let task = DispatchWorkItem { self.showFullText = true }
-                        self.hideTask = task
-                        DispatchQueue.main.asyncAfter(deadline: .now() + delaySeconds, execute: task)
-                    }
-                }
-            } else {
-                // Mouse left THIS item
-                if newHoveredID != nil {
-                    // Mouse entered ANOTHER item - immediately close this popover to prevent overlap bug
-                    self.showFullText = false
-                    self.isPopoverHovered = false
-                } else {
-                    // Mouse left entirely, use the timer gap for the popover bridge
-                    let task = DispatchWorkItem {
-                        if !self.isPopoverHovered && !self.isSystemMenuOpen {
-                            self.showFullText = false
-                        }
-                    }
-                    self.hideTask = task
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: task)
-                }
-            }
-        }
         .onReceive(NotificationCenter.default.publisher(for: NSMenu.didBeginTrackingNotification)) { _ in
             isSystemMenuOpen = true
         }
@@ -259,12 +258,17 @@ struct ClipboardItemRow: View, Equatable {
             isSystemMenuOpen = false
         }
         .onDisappear {
+            if isHovered && storage.hoveredItemID == item.id {
+                storage.hoveredItemID = nil
+            }
+            isHovered = false
             showFullText = false
             hideTask?.cancel()
             hideTask = nil
             loadedThumbnails.removeAll()
         }
         .onChange(of: item.id) { _, _ in
+            isHovered = false
             showFullText = false
             hideTask?.cancel()
             hideTask = nil
@@ -646,21 +650,7 @@ struct ClipboardItemRow: View, Equatable {
     }
     
     private func extractURLs(from item: ClipboardItem) -> [URL] {
-        if let content = item.textContent {
-            return content.components(separatedBy: "\n")
-                .filter { !$0.isEmpty }
-                .compactMap { urlString -> URL? in
-                    if let url = URL(string: urlString) {
-                        if url.scheme == "file" {
-                            return url
-                        }
-                    }
-                    return URL(fileURLWithPath: urlString)
-                }
-        } else if let url = item.fileURL {
-            return [url]
-        }
-        return []
+        item.extractedURLs
     }
     
     private func getIcon(for url: URL) -> NSImage {

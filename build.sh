@@ -61,9 +61,9 @@ cat << 'EOF' > "${CONTENTS_DIR}/Info.plist"
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.9</string>
+    <string>1.1</string>
     <key>CFBundleVersion</key>
-    <string>1.0.9</string>
+    <string>1.1</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>LSUIElement</key>
@@ -85,6 +85,16 @@ swift build -c release 2>&1
 
 # Copy binary to .app bundle
 cp .build/release/SkyPaste "${MACOS_DIR}/${APP_NAME}"
+
+# SwiftPM stamps LC_BUILD_VERSION with sdk = deployment target (14.0). AppKit gates the
+# macOS 26+ design (native Liquid Glass popovers/alerts, the Clear/Tinted glass setting)
+# on the linked SDK version, so a 14.0 stamp runs the app in legacy-compat mode.
+# Stamp the SDK that was actually used for compilation.
+SDK_PATH="${SDKROOT:-$(xcrun --show-sdk-path)}"
+SDK_VERSION="$(xcrun --sdk "${SDK_PATH}" --show-sdk-version)"
+vtool -set-build-version macos 14.0 "${SDK_VERSION}" -replace \
+    -output "${MACOS_DIR}/${APP_NAME}.tmp" "${MACOS_DIR}/${APP_NAME}"
+mv "${MACOS_DIR}/${APP_NAME}.tmp" "${MACOS_DIR}/${APP_NAME}"
 
 # Add Frameworks rpath
 install_name_tool -add_rpath @executable_path/../Frameworks "${MACOS_DIR}/${APP_NAME}"

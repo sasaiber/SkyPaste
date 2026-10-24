@@ -60,14 +60,37 @@ struct AppFolder: Identifiable, Codable, Hashable {
     }
     
     var appName: String? {
-        guard let bundleID = appBundleIDs.first,
-              let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
-        let path = url.deletingLastPathComponent().lastPathComponent
-        return path.hasSuffix(".app") ? String(path.dropLast(4)) : url.lastPathComponent
+        guard let bundleID = appBundleIDs.first else { return nil }
+        return ImageCache.shared.appDisplayName(forBundleID: bundleID)
     }
 }
 
 struct ClipboardItem: Identifiable, Codable, Equatable {
+    private static let extractedURLsCache = NSCache<NSString, NSArray>()
+
+    var extractedURLs: [URL] {
+        guard type == .file || type == .image else { return [] }
+        let cacheKey = NSString(string: "\(id.uuidString)_\(fileCount ?? 0)")
+        if let cached = Self.extractedURLsCache.object(forKey: cacheKey) as? [URL] {
+            return cached
+        }
+        let urls: [URL]
+        if let content = textContent {
+            urls = content.components(separatedBy: "\n")
+                .filter { !$0.isEmpty }
+                .compactMap { s -> URL? in
+                    if let u = URL(string: s), u.scheme == "file" { return u }
+                    return URL(fileURLWithPath: s)
+                }
+        } else if let url = fileURL {
+            urls = [url]
+        } else {
+            urls = []
+        }
+        Self.extractedURLsCache.setObject(urls as NSArray, forKey: cacheKey)
+        return urls
+    }
+
     var id: UUID = UUID()
     var timestamp: Date
     var firstCopiedAt: Date

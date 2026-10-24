@@ -50,12 +50,6 @@ struct MainView: View {
     @State private var urlsToExtractToNewFolder: [URL]? = nil
     @State private var itemToExtractFrom: ClipboardItem? = nil
     
-    @State private var showingTrashAlert = false
-    @State private var showingFolderTrashAlert = false
-    @State private var showingClearFolderAlert = false
-    @State private var showingDeleteFolderAllAlert = false
-    @State private var folderToConfirmClear: AppFolder? = nil
-    @State private var folderToConfirmDeleteAll: AppFolder? = nil
     @State private var currentWindowHeight: CGFloat = 520
     
     @AppStorage("disableMediaPreviews") private var disableMediaPreviews: Bool = false
@@ -111,16 +105,12 @@ struct MainView: View {
                 case .files:
                     guard item.type == .file else { return false }
                     guard let url = item.fileURL else { return true }
-                    var isDir: ObjCBool = false
-                    FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
-                    return !isDir.boolValue
+                    return !ImageCache.shared.isDirectory(at: url)
                 case .images: return item.type == .image
                 case .folders:
                     guard item.type == .file else { return false }
                     guard let url = item.fileURL else { return false }
-                    var isDir: ObjCBool = false
-                    FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
-                    return isDir.boolValue
+                    return ImageCache.shared.isDirectory(at: url)
                 case .urls:
                     return item.type == .link
                 case .device(let name):
@@ -319,6 +309,7 @@ struct MainView: View {
             Divider()
             
             clipboardList
+                .allowsHitTesting(!showingFolderSettings)
         }
         .frame(width: 430, height: currentWindowHeight, alignment: .top)
         .glassBackground(cornerRadius: 16)
@@ -491,66 +482,6 @@ struct MainView: View {
                         itemToExtractFrom = nil
                     }
                 )
-            } else if showingTrashAlert {
-                ZStack {
-                    Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { showingTrashAlert = false }
-                    VStack(spacing: 16) {
-                        Text("Clear Unpinned Items").font(.headline)
-                        Text("Are you sure you want to delete all unpinned items? This action cannot be undone.")
-                            .font(.caption).multilineTextAlignment(.center).foregroundColor(.secondary)
-                        HStack {
-                            Button("Cancel") { showingTrashAlert = false }.keyboardShortcut(.escape, modifiers: [])
-                            Spacer()
-                            Button("Delete & Don't Ask Again") {
-                                suppressGlobalTrashWarning = true
-                                storage.clearUnpinned()
-                                showingTrashAlert = false
-                            }
-                            Button("Delete") {
-                                storage.clearUnpinned()
-                                showingTrashAlert = false
-                            }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
-                        }
-                    }
-                    .padding().frame(width: 320).background(Color(NSColor.windowBackgroundColor)).cornerRadius(12).shadow(radius: 10)
-                }
-            } else if showingClearFolderAlert, let folder = folderToConfirmClear {
-                ZStack {
-                    Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { showingClearFolderAlert = false; folderToConfirmClear = nil }
-                    VStack(spacing: 16) {
-                        Text("Clear All Items").font(.headline)
-                        Text("This will permanently delete all items (including pinned) from \"\(folder.name)\". This action cannot be undone.")
-                            .font(.caption).multilineTextAlignment(.center).foregroundColor(.secondary)
-                        HStack {
-                            Button("Cancel") { showingClearFolderAlert = false; folderToConfirmClear = nil }.keyboardShortcut(.escape, modifiers: [])
-                            Spacer()
-                            Button("Clear All", role: .destructive) {
-                                storage.clearFolder(id: folder.id)
-                                showingClearFolderAlert = false; folderToConfirmClear = nil
-                            }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
-                        }
-                    }
-                    .padding().frame(width: 380).background(Color(NSColor.windowBackgroundColor)).cornerRadius(12).shadow(radius: 10)
-                }
-            } else if showingDeleteFolderAllAlert, let folder = folderToConfirmDeleteAll {
-                ZStack {
-                    Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { showingDeleteFolderAllAlert = false; folderToConfirmDeleteAll = nil }
-                    VStack(spacing: 16) {
-                        Text("Delete Folder & All Items").font(.headline)
-                        Text("This will permanently delete \"\(folder.name)\" and all its items (including pinned) from everywhere. This action cannot be undone.")
-                            .font(.caption).multilineTextAlignment(.center).foregroundColor(.secondary)
-                        HStack {
-                            Button("Cancel") { showingDeleteFolderAllAlert = false; folderToConfirmDeleteAll = nil }.keyboardShortcut(.escape, modifiers: [])
-                            Spacer()
-                            Button("Delete All", role: .destructive) {
-                                storage.deleteFolderAndAllItems(id: folder.id)
-                                storage.selectedFolderID = nil
-                                showingDeleteFolderAllAlert = false; folderToConfirmDeleteAll = nil
-                            }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
-                        }
-                    }
-                    .padding().frame(width: 380).background(Color(NSColor.windowBackgroundColor)).cornerRadius(12).shadow(radius: 10)
-                }
             }
         }
     }
@@ -648,7 +579,16 @@ struct MainView: View {
                         if suppressGlobalTrashWarning {
                             storage.clearUnpinned()
                         } else {
-                            showingTrashAlert = true
+                            let result = ConfirmationAlert.run(
+                                title: "Clear Unpinned Items",
+                                message: "Are you sure you want to delete all unpinned items? This action cannot be undone.",
+                                confirmTitle: "Delete",
+                                suppressionTitle: "Don't ask again"
+                            )
+                            if result.confirmed {
+                                if result.suppress { suppressGlobalTrashWarning = true }
+                                storage.clearUnpinned()
+                            }
                         }
                     }
                 }) { Image(systemName: "trash").foregroundColor(.secondary).frame(width: 24, height: 24).contentShape(Rectangle()) }
@@ -676,14 +616,25 @@ struct MainView: View {
                 }
                 Divider()
                 Button("Clear all items in this folder (incl. pinned)", role: .destructive) {
-                    folderToConfirmClear = folder
-                    showingClearFolderAlert = true
+                    let result = ConfirmationAlert.run(
+                        title: "Clear All Items",
+                        message: "This will permanently delete all items (including pinned) from \"\(folder.name)\". This action cannot be undone.",
+                        confirmTitle: "Clear All"
+                    )
+                    if result.confirmed { storage.clearFolder(id: folder.id) }
                 }
                 Divider()
                 Button("Delete folder (keep items)", role: .destructive) { storage.deleteFolder(id: folder.id); storage.selectedFolderID = nil }
                 Button("Delete folder and all its items", role: .destructive) {
-                    folderToConfirmDeleteAll = folder
-                    showingDeleteFolderAllAlert = true
+                    let result = ConfirmationAlert.run(
+                        title: "Delete Folder & All Items",
+                        message: "This will permanently delete \"\(folder.name)\" and all its items (including pinned) from everywhere. This action cannot be undone.",
+                        confirmTitle: "Delete All"
+                    )
+                    if result.confirmed {
+                        storage.deleteFolderAndAllItems(id: folder.id)
+                        storage.selectedFolderID = nil
+                    }
                 }
                 Divider()
                 Button("Close") { storage.selectedFolderID = nil; storage.showPinnedOnly = false }
@@ -728,27 +679,12 @@ struct MainView: View {
     }
 
     private func itemRow(_ item: ClipboardItem) -> some View {
-        let fileURLs: [URL] = {
-            if item.type == .file || item.type == .image {
-                if let content = item.textContent {
-                    return content.components(separatedBy: "\n")
-                        .filter { !$0.isEmpty }
-                        .compactMap { s -> URL? in
-                            if let u = URL(string: s), u.scheme == "file" { return u }
-                            return URL(fileURLWithPath: s)
-                        }
-                } else if let url = item.fileURL {
-                    return [url]
-                }
-            }
-            return []
-        }()
+        let fileURLs = item.extractedURLs
 
         return ClipboardItemRow(
             storage: storage,
             item: item,
             folders: storage.folders,
-            hoveredItemID: storage.hoveredItemID,
             selectedFolderID: storage.selectedFolderID,
             onPin: { withAnimation(.easeOut(duration: 0.2)) { storage.togglePin(for: item.id) } },
             onDelete: { withAnimation(.easeOut(duration: 0.2)) { storage.deleteItem(with: item.id) } },
@@ -793,13 +729,6 @@ struct MainView: View {
         .equatable()
         .id(item.id)
         .contentShape(Rectangle())
-        .onHover { isHovered in
-            guard !showingFolderSettings else { return }
-            withAnimation(.quickSpring) {
-                if isHovered { storage.hoveredItemID = item.id }
-                else if storage.hoveredItemID == item.id { storage.hoveredItemID = nil }
-            }
-        }
         .onTapGesture {
             NSApp.activate(ignoringOtherApps: true)
             let flags = (NSApp.currentEvent?.modifierFlags ?? []).union(NSEvent.modifierFlags)
@@ -910,17 +839,24 @@ struct MainView: View {
                         itemRow(item)
                     }
                 } else {
-                    ForEach(Array(currentItems.enumerated()), id: \.element.id) { index, item in
-                        if index > 0 && !item.isPinned && currentItems[index - 1].isPinned {
+                    if !pinned.isEmpty {
+                        ForEach(pinned) { item in
+                            itemRow(item)
+                        }
+                        .onMove { source, destination in
+                            storage.movePinned(source: source, destination: destination)
+                        }
+                        if !unpinned.isEmpty {
                             Divider()
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 2)
+                                .listRowInsets(EdgeInsets())
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
                         }
-                        itemRow(item)
                     }
-                    .onMove { source, destination in
-                        let isReorderingPinnedOnly = source.allSatisfy { currentItems[$0].isPinned }
-                        if isReorderingPinnedOnly { storage.movePinned(source: source, destination: destination) }
+                    ForEach(unpinned) { item in
+                        itemRow(item)
                     }
                 }
             }
@@ -1005,7 +941,7 @@ struct FolderSettingsOverlay: View {
     
     var body: some View {
         ZStack {
-            Color.black.opacity(0.4).ignoresSafeArea().onTapGesture {
+            Color.black.opacity(0.2).ignoresSafeArea().onTapGesture {
                 onDismiss()
             }
             
@@ -1181,9 +1117,7 @@ struct FolderSettingsOverlay: View {
             }
             .padding()
             .frame(width: 340)
-            .background(Color(NSColor.windowBackgroundColor))
-            .cornerRadius(12)
-            .shadow(radius: 10)
+            .glassBackground(cornerRadius: 20)
         }
         .sheet(isPresented: $showingAppPicker) {
             AppPickerView(selectedBundleID: $newBundleID)
@@ -1249,10 +1183,18 @@ class LibraryWindowManager {
         let estimatedLibHeight = foldersCount == 0 ? 100 : CGFloat(foldersCount * 42) + CGFloat(max(0, foldersCount - 1) * 4) + 16
         let initialHeight = min(estimatedLibHeight + 85, 440)
         
+        // The SwiftUI content must have exactly the panel height. A taller root view makes
+        // NSHostingView grow the window upward from its bottom edge, pushing it past the
+        // top of the screen when it is anchored under the status item.
+        let contentView = LibraryContentView(storage: storage, height: initialHeight, onClose: { [weak self] in
+            self?.close()
+        })
+        let hostingView = NSHostingView(rootView: contentView)
+        
         let button = position == "statusItem" ? AppDelegate.shared.statusBarItem.button : nil
         let panel = LibraryPanel(
             contentRect: NSRect(x: 0, y: 0, width: 360, height: initialHeight),
-            contentView: NSView(),
+            contentView: hostingView,
             statusBarButton: button,
             position: position
         )
@@ -1261,13 +1203,6 @@ class LibraryWindowManager {
             self?.panel = nil
         }
         self.panel = panel
-        
-        let contentView = LibraryContentView(storage: storage, onClose: { [weak self] in
-            self?.close()
-        })
-        
-        let hostingView = NSHostingView(rootView: contentView)
-        panel.contentView = hostingView
         
         panel.orderFrontRegardless()
         panel.makeKey()
@@ -1336,11 +1271,11 @@ class LibraryPanel: FloatingPanel {
 
 struct LibraryContentView: View {
     @ObservedObject var storage: Storage
+    let height: CGFloat
     var onClose: () -> Void
     
     @State private var searchText = ""
     @State private var monitor: Any?
-    @State private var currentLibraryWindowHeight: CGFloat = 440
     
     var filteredFolders: [AppFolder] {
         let sorted = storage.folders.sorted { $0.order < $1.order }
@@ -1385,7 +1320,7 @@ struct LibraryContentView: View {
                 .padding(.horizontal, 8).padding(.vertical, 8)
             }
         }
-        .frame(width: 360, height: currentLibraryWindowHeight, alignment: .top)
+        .frame(width: 360, height: height, alignment: .top)
         .glassBackground(cornerRadius: 16)
         .onAppear {
             monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in

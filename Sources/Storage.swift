@@ -8,9 +8,9 @@ class Storage: ObservableObject {
     @Published var items: [ClipboardItem] = []
     @Published var folders: [AppFolder] = []
     
-    // Popover inner state for shortcuts
-    @Published var popoverSelectedURLs: [URL] = []
-    @Published var popoverHoveredURL: URL? = nil
+    // Popover inner state for shortcuts (not @Published so hovering inside a popover does not re-render MainView)
+    var popoverSelectedURLs: [URL] = []
+    var popoverHoveredURL: URL? = nil
     
     // Cached folder item counts (updated when items change)
     private var folderItemCountCache: [UUID: Int] = [:]
@@ -36,7 +36,8 @@ class Storage: ObservableObject {
             popoverHoveredURL = nil
         }
     }
-    @Published var hoveredItemID: UUID? = nil
+    // Non-published so hovering a row does not broadcast objectWillChange to the entire MainView list
+    var hoveredItemID: UUID? = nil
     @Published var showPinnedOnly: Bool = false
     
     // Toast notification for folder move feedback

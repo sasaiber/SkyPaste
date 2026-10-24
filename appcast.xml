@@ -4,6 +4,26 @@
         <title>SkyPaste Updates</title>
         
         <item>
+            <title>Version 1.1</title>
+            <pubDate>Sat, 24 Oct 2026 14:37:12 +0000</pubDate>
+            <description><![CDATA[
+<ul>
+<li>Significantly smoother list scrolling when browsing large clipboard histories.</li>
+<li>Optimized hover tracking and eliminated full-list re-renders during mouse movement.</li>
+<li>Added caching for thumbnail existence checks, file directory checks, and application display names to prevent main thread hitches.</li>
+<li>Fixed Library window appearing off-screen when opened from the status bar menu.</li>
+<li>Adopted native macOS Liquid Glass styling and system dialogs.</li>
+</ul>
+            ]]></description>
+            <enclosure url="https://github.com/sasaiber/SkyPaste/releases/download/1.1/SkyPaste.zip"
+                       sparkle:version="1.1"
+                       sparkle:shortVersionString="1.1"
+                       sparkle:edSignature="j7RFKI8adgixrS7B+RR1HwkofcRSzzGd4mqi6LemwP5zYxpbdZEJ1Ier/j55ConMPPZOMKi9A1g266WYvPsyDg=="
+                       length="3763380"
+                       type="application/octet-stream" />
+        </item>
+
+        <item>
             <title>Version 1.0.9</title>
             <pubDate>Thu, 01 Oct 2026 12:00:00 +0000</pubDate>
             <description><![CDATA[

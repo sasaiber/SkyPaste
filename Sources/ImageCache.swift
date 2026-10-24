@@ -7,6 +7,9 @@ class ImageCache {
     
     // NSCache automatically handles memory pressure and eviction natively
     private let cache = NSCache<NSURL, NSImage>()
+    private var negativeAppIconBundleIDs = Set<String>()
+    private var appDisplayNames: [String: String] = [:]
+    private let isDirectoryCache = NSCache<NSString, NSNumber>()
     
     init() {
         // Bound both item count and memory pressure behavior.
@@ -37,7 +40,8 @@ class ImageCache {
     }
     
     func fastAppIcon(bundleID: String?) -> NSImage? {
-        guard let bundleID = bundleID else { return nil }
+        guard let bundleID = bundleID, !bundleID.isEmpty else { return nil }
+        if negativeAppIconBundleIDs.contains(bundleID) { return nil }
         let cacheKey = URL(string: "appicon://\(bundleID)")!
         if let cached = image(for: cacheKey) {
             return cached
@@ -48,8 +52,30 @@ class ImageCache {
         }
         if let icon = icon {
             setImage(icon, for: cacheKey)
+        } else {
+            negativeAppIconBundleIDs.insert(bundleID)
         }
         return icon
+    }
+
+    func appDisplayName(forBundleID bundleID: String) -> String? {
+        if let cached = appDisplayNames[bundleID] { return cached }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
+        let path = url.deletingLastPathComponent().lastPathComponent
+        let name = path.hasSuffix(".app") ? String(path.dropLast(4)) : url.lastPathComponent
+        appDisplayNames[bundleID] = name
+        return name
+    }
+
+    func isDirectory(at url: URL) -> Bool {
+        let key = url.path as NSString
+        if let cached = isDirectoryCache.object(forKey: key) {
+            return cached.boolValue
+        }
+        var isDir: ObjCBool = false
+        FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+        isDirectoryCache.setObject(NSNumber(value: isDir.boolValue), forKey: key)
+        return isDir.boolValue
     }
 
     func fastFileIcon(for url: URL) -> NSImage {
